@@ -401,3 +401,33 @@ img.emoji-ios{display:block;user-select:none;-webkit-user-drag:none;filter:drop-
   .hn{padding:0 1rem}
   .vbar{padding:0 .55rem;gap:5px}
 }
+
+.lobby-music-btn {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 55px;
+  height: 55px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: none;
+  cursor: pointer;
+  background: radial-gradient(circle, #e50914, #7a0000);
+  box-shadow: 0 0 15px rgba(229,9,20,0.6);
+  transition: all 0.3s ease;
+}
+
+.lobby-music-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lobby-music-btn.muted {
+  filter: grayscale(1) brightness(0.6);
+  box-shadow: none;
+}
+
+.lobby-music-btn:hover {
+  transform: scale(1.1);
+}

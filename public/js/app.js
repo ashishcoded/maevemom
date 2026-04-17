@@ -180,6 +180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   $('v-url').addEventListener('input', e => onVidUrl(e.target));
+  initLobbyAudio();
 });
 
 // ── Noise canvas ──────────────────────────────────────────────────────────────
@@ -270,6 +271,8 @@ function resetPlayerUI() {
   if($('r-sub')) $('r-sub').textContent='';
   if($('clear-content-btn')) $('clear-content-btn').classList.add('hidden');
   setSyncStatus(S.isOwner?'hosting':'synced', S.isOwner?'Ready to load':'Waiting for content');
+
+  handleLobbyMusic(true);
 }
 function setLibraryState(items, usage) {
   S.library.items = Array.isArray(items) ? items : [];
@@ -682,6 +685,9 @@ window.doLoadVid = () => {
 
 // ── Load video ────────────────────────────────────────────────────────────────
 function loadVidUrl(url,title,meta,type) {
+
+  handleLobbyMusic(false);
+
   const safeUrl=type==='embed'?normalizeEmbedUrl(url):url;
   S.vid={url:safeUrl,title:title||'Video',meta:meta||'',type:type||'embed'};
   if($('clear-content-btn')) $('clear-content-btn').classList.toggle('hidden',!S.isOwner);
@@ -1130,3 +1136,52 @@ function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 let _tt;
 function toast(msg){const el=$('toast');el.textContent=msg;el.classList.remove('hidden');el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),2900);}
 window.toast=toast;
+
+
+/* ================= LOBBY MUSIC FEATURE (SAFE BLOCK) ================= */
+
+S.lobbyAudio = {
+  hasPlayedOnce: false,
+  muted: localStorage.getItem('lobbyMuted') === 'true'
+};
+
+function initLobbyAudio() {
+  const audio = $('lobby-audio');
+  const btn = $('lobby-music-btn');
+  if (!audio || !btn) return;
+
+  audio.muted = S.lobbyAudio.muted;
+  updateBtn();
+
+  btn.onclick = () => {
+    S.lobbyAudio.muted = !S.lobbyAudio.muted;
+    audio.muted = S.lobbyAudio.muted;
+    localStorage.setItem('lobbyMuted', S.lobbyAudio.muted);
+    updateBtn();
+
+    if (!audio.paused && !S.lobbyAudio.muted) return;
+    audio.play().catch(()=>{});
+  };
+
+  function updateBtn() {
+    btn.classList.toggle('muted', S.lobbyAudio.muted);
+  }
+}
+
+function handleLobbyMusic(isLobby) {
+  const audio = $('lobby-audio');
+  if (!audio) return;
+
+  if (isLobby) {
+    if (!S.lobbyAudio.hasPlayedOnce && !S.lobbyAudio.muted) {
+      audio.play().then(() => {
+        S.lobbyAudio.hasPlayedOnce = true;
+      }).catch(()=>{});
+    }
+  } else {
+    audio.pause();
+    audio.currentTime = 0;
+  }
+}
+
+/* ================= END LOBBY MUSIC FEATURE ================= */

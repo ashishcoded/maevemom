@@ -160,6 +160,9 @@
           <p class="pe-t">No content loaded</p>
           <p class="pe-s">Tap <strong>Load</strong> to start watching together</p>
           <button class="pe-btn" onclick="openVideoModal()">+ Load Content</button>
+          <button id="lobby-music-btn" class="lobby-music-btn">
+  <img src="/images/dhurandhar.png" alt="music">
+</button>
         </div>
         <div class="player-connect hidden" id="player-connect">
           <div class="pc-loader-ring"></div>
@@ -368,5 +371,9 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/js/app.js"></script>
+
+<audio id="lobby-audio" loop>
+  <source src="/audio/aakhri-ishq.mp3" type="audio/mp3">
+</audio>
 </body>
 </html>
