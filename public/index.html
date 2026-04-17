@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maeve'mom</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<!-- Cinematic / action fonts for headings -->
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Russo+One&family=Oswald:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Twemoji for consistent cross-platform emoji -->
+<script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous" defer></script>
+<link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<!-- ▌AUTH ▌-->
+<div id="s-auth" class="screen active">
+  <div class="auth-bg">
+    <div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
+    <div class="film-reel tl"></div><div class="film-reel br"></div>
+    <canvas id="noise-canvas" class="noise-canvas"></canvas>
+  </div>
+  <div class="auth-shell">
+    <div class="auth-brand">
+      <div class="brand-play"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="19" stroke="rgba(255,255,255,.25)" stroke-width="1.5" fill="none"/><path d="M15 11L31 20L15 29Z" fill="white"/></svg></div>
+      <h1>MAEVE<span class="brand-apos">'</span>MOM</h1>
+      <p>Your private cinema, together</p>
+    </div>
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <button class="atab active" data-tab="login">Sign In</button>
+        <button class="atab" data-tab="register">Create Account</button>
+      </div>
+      <div id="f-login" class="aform">
+        <p class="ql-lbl">Quick login</p>
+        <div class="ql-row">
+          <button class="ql-btn" onclick="quickLogin('ashish','ashish123')"><span class="ql-av" style="--c:#e50914">A</span>Ashish</button>
+          <button class="ql-btn" onclick="quickLogin('disha','disha123')"><span class="ql-av" style="--c:#ff6b9d">D</span>Disha</button>
+        </div>
+        <div class="or-line"><span>or</span></div>
+        <div class="fld"><label>Username</label><input id="l-user" type="text" placeholder="username" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <div class="fld"><label>Password</label><input id="l-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+        <button class="btn-r" onclick="doLogin()"><span>Enter the Cinema</span><span class="arr">→</span></button>
+        <p class="ferr" id="l-err"></p>
+      </div>
+      <div id="f-register" class="aform hidden">
+        <div class="fld"><label>Username</label><input id="r-user" type="text" placeholder="choose a username" onkeydown="if(event.key==='Enter')doRegister()"><span class="fhint">2–20 chars (letters/numbers/_)</span></div>
+        <div class="fld"><label>Display Name</label><input id="r-name" type="text" placeholder="your name" onkeydown="if(event.key==='Enter')doRegister()"></div>
+        <div class="fld"><label>Password</label><input id="r-pass" type="password" placeholder="min 6 characters" onkeydown="if(event.key==='Enter')doRegister()"></div>
+        <button class="btn-r" onclick="doRegister()"><span>Create Account</span><span class="arr">→</span></button>
+        <p class="ferr" id="r-err"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ▌HOME ▌-->
+<div id="s-home" class="screen hidden">
+  <nav class="hn">
+    <div class="hn-brand"><svg viewBox="0 0 30 30" width="24" height="24"><circle cx="15" cy="15" r="14" fill="#e50914"/><path d="M11 8l14 7-14 7V8Z" fill="white"/></svg><span>MAEVE<em>'</em>MOM</span></div>
+    <div class="hn-r">
+      <button class="hn-lib" onclick="openLibraryModal()" title="My saved media"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span>Library</span></button>
+      <button class="hn-prof" onclick="openProfileModal()"><div class="hn-av" id="hn-av"></div><span id="hn-nm"></span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+      <button class="hn-out" onclick="signOut()" title="Sign out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
+    </div>
+  </nav>
+
+  <div class="home-hero">
+    <div class="hero-bg-strip"></div>
+    <div class="hero-content">
+      <div class="hero-text">
+        <div class="hero-tag">✦ Private Cinema</div>
+        <h2 class="hero-h">WATCH TOGETHER.<br><span class="hero-h-sub">FEEL TOGETHER.</span></h2>
+        <p class="hero-p">Create a private room, load any content — fully synced, zero friction.</p>
+        <div class="hero-library-card">
+          <button class="hero-library-btn" onclick="openLibraryModal()"><span class="hero-library-ico">📚</span><span>Open Saved Library</span></button>
+          <div class="hero-budget">
+            <div class="hero-budget-top"><span>Server media budget</span><span id="home-budget-text">0 GB / 12 GB</span></div>
+            <div class="hero-budget-track"><div class="hero-budget-fill" id="home-budget-fill"></div></div>
+            <p id="home-budget-note">Save files once and reuse them in any room.</p>
+          </div>
+        </div>
+        <div class="hero-ctas">
+          <button class="hcta-create" onclick="openCreateModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Create Room</button>
+          <button class="hcta-join" onclick="openJoinModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg> Join Room</button>
+        </div>
+      </div>
+      <div class="profiles-section">
+        <div class="profiles-label">Watching together</div>
+        <div class="profiles-duo">
+          <div class="prof-card">
+            <div class="pc-glow" id="hpa-glow"></div>
+            <div class="pc-screen"><div class="pc-scanlines"></div><div class="pc-play-icon">▶</div></div>
+            <div class="pc-av-wrap"><div class="pc-av" id="hpa-av"></div><div class="pc-online-ring"></div></div>
+            <div class="pc-name" id="hpa-name">Ashish</div>
+            <div class="pc-bio" id="hpa-bio">The Owner 🎬</div>
+            <div class="pc-badge owner-badge">OWNER</div>
+          </div>
+          <div class="profiles-bridge"><div class="bridge-line"></div><div class="bridge-heart">♥</div><div class="bridge-line"></div></div>
+          <div class="prof-card prof-card-b">
+            <div class="pc-glow" style="--gc:#ff6b9d"></div>
+            <div class="pc-screen pc-screen-b"><div class="pc-scanlines"></div><div class="pc-play-icon">▶</div></div>
+            <div class="pc-av-wrap"><div class="pc-av" id="hpb-av"></div><div class="pc-online-ring pc-ring-b"></div></div>
+            <div class="pc-name" id="hpb-name">Disha</div>
+            <div class="pc-bio" id="hpb-bio">The Co-star 💕</div>
+            <div class="pc-badge guest-badge">GUEST</div>
+          </div>
+        </div>
+        <div class="profiles-bottom-lbl" id="h-greet">Your private cinema awaits</div>
+      </div>
+    </div>
+  </div>
+  <div class="home-foot">MAEVE'MOM &nbsp;·&nbsp; Made with ♥ for two</div>
+</div>
+
+<!-- ▌ROOM ▌-->
+<div id="s-room" class="screen hidden">
+  <div class="room-wrap" id="room-wrap">
+    <div class="vside" id="vside">
+
+      <!-- Top bar -->
+      <div class="vbar" id="vbar">
+        <button class="vbar-back" onclick="leaveRoom()" title="Leave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></button>
+        <div class="vbar-mid">
+          <span class="vbar-name" id="r-title">Maeve'mom</span>
+          <span class="vbar-sub" id="r-sub"></span>
+        </div>
+        <div class="vbar-r">
+          <div class="owner-ctrl-badge hidden" id="owner-ctrl-badge">★ OWNER</div>
+          <div class="online-pill"><span class="op-dot"></span><span id="op-n">0</span><span>/2</span></div>
+          <button class="vbtn voice-btn" id="voice-btn" onclick="toggleVoice()" title="Voice call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.07 1.18 2 2 0 012.03 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></button>
+          <button class="vbtn hidden" id="clear-content-btn" onclick="clearCurrentContent()" title="Clear current content"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg> Clear</button>
+          <button class="vbtn" onclick="openVideoModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polygon points="5 3 19 12 5 21 5 3"/></svg> Load</button>
+          <button class="vbtn" onclick="openInvitePanel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg> Invite</button>
+          <button class="vbtn vbtn-exit" onclick="leaveRoom()" title="Leave room"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg> Exit</button>
+          <button class="vbtn sb-toggle-btn" id="sb-toggle-btn" onclick="toggleSidebar()" title="Toggle panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Call bar -->
+      <div class="call-bar hidden" id="call-bar">
+        <div class="cb-left"><div class="cb-dot" id="cb-dot"></div><span id="cb-status">Calling…</span></div>
+        <div class="cb-waves"><span></span><span></span><span></span><span></span><span></span></div>
+        <!-- BUG FIX #8: mute indicator for partner -->
+        <div class="cb-partner-mute hidden" id="cb-partner-mute">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23M12 19v4M8 23h8"/></svg>
+          <span id="cb-partner-name">Partner</span> muted
+        </div>
+        <div class="cb-right">
+          <button class="cb-mute" id="cb-mute" onclick="toggleMute()" title="Mute/Unmute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" id="cb-mute-icon"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></button>
+          <button class="cb-end" onclick="endCall()"><svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg> End</button>
+        </div>
+      </div>
+
+      <!-- Player -->
+      <div class="player" id="player">
+        <div class="pempty" id="pempty">
+          <div class="pe-reel">🎞</div>
+          <p class="pe-t">No content loaded</p>
+          <p class="pe-s">Tap <strong>Load</strong> to start watching together</p>
+          <button class="pe-btn" onclick="openVideoModal()">+ Load Content</button>
+        </div>
+        <div class="player-connect hidden" id="player-connect">
+          <div class="pc-loader-ring"></div>
+          <div class="pc-loader-text">Connecting room…</div>
+          <div class="pc-loader-sub" id="player-connect-sub">Restoring synced playback</div>
+        </div>
+        <iframe id="vframe" src="" frameborder="0" allowfullscreen
+          allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+          referrerpolicy="no-referrer-when-downgrade"
+          style="display:none;width:100%;height:100%;border:none"></iframe>
+      </div>
+
+      <!-- Sync strip -->
+      <div class="sync-strip">
+        <div class="ss-left"><span class="ss-dot" id="ss-dot"></span><span id="ss-txt">Ready</span></div>
+        <div class="ss-right" id="ss-right"></div>
+      </div>
+
+      <!-- Viewer bar -->
+      <div class="vwbar">
+        <div class="vw-card">
+          <div class="vw-av" id="vwh-av"></div>
+          <div class="vw-info"><span class="vw-n" id="vwh-nm">Owner</span><span class="vw-r">Owner ★</span></div>
+          <!-- BUG FIX #8: mute indicator in viewer bar -->
+          <div class="vw-mute hidden" id="vwh-mute" title="Muted"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/></svg></div>
+          <span class="vw-s online" id="vwh-s"></span>
+        </div>
+        <div class="vw-sep"><div class="hb">♥</div><span>watching</span></div>
+        <div class="vw-card vw-card-r">
+          <span class="vw-s offline" id="vwg-s"></span>
+          <div class="vw-mute hidden" id="vwg-mute" title="Muted"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/></svg></div>
+          <div class="vw-info vw-info-r"><span class="vw-n" id="vwg-nm">Waiting…</span><span class="vw-r">Guest</span></div>
+          <div class="vw-av vw-av-g" id="vwg-av">?</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+      <div class="sb-tabs">
+        <button class="sbt active" data-p="chat"  onclick="sbTab('chat')">Chat</button>
+        <button class="sbt" data-p="room"  onclick="sbTab('room')">Room</button>
+        <button class="sbt" data-p="media" onclick="sbTab('media')">Media</button>
+      </div>
+
+      <!-- CHAT -->
+      <div class="sb-panel active" id="p-chat">
+        <div class="emj-strip" id="emj-strip"></div>
+        <div class="chat-box" id="chat-box">
+          <div class="chat-mt"><div class="cmt-icon">💬</div><p>Say hello!</p></div>
+        </div>
+        <div class="typing-bar hidden" id="typing-bar">
+          <div class="tdots"><span></span><span></span><span></span></div>
+          <span id="t-who"></span> is typing…
+        </div>
+        <div class="chat-in">
+          <textarea id="chat-inp" rows="1" placeholder="Type something…" oninput="chatInputH(this)" onkeydown="chatKeyH(event)"></textarea>
+          <button class="chat-send" onclick="sendChat()"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
+        </div>
+      </div>
+
+      <!-- ROOM INFO -->
+      <div class="sb-panel hidden" id="p-room">
+        <div class="ri-blk">
+          <div class="ri-lbl">Room</div>
+          <div class="ri-row"><span>Name</span><strong id="ri-name">—</strong></div>
+          <div class="ri-row"><span>ID</span><strong id="ri-id" class="mono">—</strong></div>
+          <div class="ri-row"><span>Private</span><strong id="ri-priv">No</strong></div>
+          <div class="ri-row"><span>You are</span><strong id="ri-role">—</strong></div>
+        </div>
+        <div class="ri-blk">
+          <div class="ri-lbl">Invite</div>
+          <div class="cp-row"><input id="inv-link" class="cp-in" readonly><button class="cp-btn" onclick="cp('inv-link','Link copied!')">Copy</button></div>
+          <div class="cp-row"><input id="inv-id" class="cp-in mono" readonly><button class="cp-btn" onclick="cp('inv-id','ID copied!')">Copy</button></div>
+          <div class="cp-row hidden" id="inv-pw-r"><input id="inv-pw" class="cp-in" readonly><button class="cp-btn" onclick="cp('inv-pw','Password copied!')">Copy</button></div>
+        </div>
+        <div class="ri-blk hidden" id="xfer-blk">
+          <div class="ri-lbl">Transfer Ownership</div>
+          <p class="ri-desc">Give full owner controls to your partner</p>
+          <button class="btn-xfer" id="btn-xfer" onclick="transferOwnership()">Transfer to Partner →</button>
+        </div>
+        <div class="ri-blk"><button class="btn-leave" onclick="leaveRoom()">Leave Room</button></div>
+      </div>
+
+      <!-- MEDIA -->
+      <div class="sb-panel hidden" id="p-media">
+        <div class="media-hdr">
+          <span>Shared Media Library</span>
+          <label class="up-lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> Save<input type="file" id="up-inp" accept="video/*" style="display:none" onchange="uploadVid(this)"></label>
+        </div>
+        <div class="media-budget">
+          <div class="media-budget-row"><span>Server capacity</span><span id="room-budget-text">0 GB / 12 GB</span></div>
+          <div class="media-budget-track"><div class="media-budget-fill" id="room-budget-fill"></div></div>
+          <p id="room-budget-note">Both users can play anything saved here.</p>
+        </div>
+        <div class="up-prog hidden" id="up-prog"><div class="up-track"><div class="up-fill" id="up-fill"></div></div><span id="up-lbl2">Uploading…</span></div>
+        <div class="media-list" id="media-list"><div class="media-mt"><div style="font-size:2rem;opacity:.2">📁</div><p>No uploads yet</p></div></div>
+      </div>
+    </div>
+
+    <!-- FLOATING CHAT (shown when sidebar is hidden) -->
+    <div class="float-chat hidden" id="float-chat">
+      <div class="fc-msgs" id="fc-msgs"></div>
+      <div class="fc-emj" id="fc-emj"></div>
+      <div class="fc-in">
+        <textarea id="fc-inp" rows="1" placeholder="Message…" oninput="fcInputH(this)" onkeydown="fcKeyH(event)"></textarea>
+        <button onclick="fcSend()"><svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="overlay hidden" id="m-create">
+  <div class="modal">
+    <div class="mhdr"><h3>Create Room</h3><button class="mx" onclick="closeModal('m-create')">✕</button></div>
+    <div class="fld"><label>Room Name</label><input id="c-name" type="text" placeholder="Movie Night 🎬" maxlength="40" onkeydown="if(event.key==='Enter')doCreate()"></div>
+    <label class="tog-row"><input type="checkbox" id="c-priv" onchange="document.getElementById('c-pw-w').classList.toggle('hidden',!this.checked)"><div class="tog-info"><span class="tog-lbl">Private room</span><span class="tog-sub">Password required to join</span></div><div class="tog-pill"></div></label>
+    <div class="fld hidden" id="c-pw-w"><label>Password</label><input id="c-pw" type="password" placeholder="Set password" onkeydown="if(event.key==='Enter')doCreate()"></div>
+    <button class="btn-r" onclick="doCreate()">Create Room →</button>
+    <p class="ferr" id="c-err"></p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-join">
+  <div class="modal">
+    <div class="mhdr"><h3>Join Room</h3><button class="mx" onclick="closeModal('m-join')">✕</button></div>
+    <div class="fld"><label>Room ID</label><input id="j-id" type="text" placeholder="e.g. A1B2C3D4" style="text-transform:uppercase;letter-spacing:.12em" onkeydown="if(event.key==='Enter')doJoin()"></div>
+    <div class="fld hidden" id="j-pw-w"><label>Password</label><input id="j-pw" type="password" placeholder="Room password" onkeydown="if(event.key==='Enter')doJoin()"></div>
+    <button class="btn-r" onclick="doJoin()">Join Room →</button>
+    <p class="ferr" id="j-err"></p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-video">
+  <div class="modal modal-w">
+    <div class="mhdr"><h3>📽 Load Content</h3><button class="mx" onclick="closeModal('m-video')">✕</button></div>
+    <p class="modal-desc">Paste any URL — Vidking, YouTube, Vimeo, direct .mp4, or any embeddable link. Content syncs to both users instantly.</p>
+    <div class="fld">
+      <label>URL / ID</label>
+      <input id="v-url" type="text" placeholder="https://… paste any video URL or Vidking/YouTube link" oninput="onVidUrl(this)">
+      <span class="fhint">Supports: Vidking · YouTube · Vimeo · MP4 · Any iframe-embeddable URL</span>
+    </div>
+    <div class="sel-prev hidden" id="sel-prev"><span id="sel-ico">🎬</span><div><div id="sel-ti" style="font-weight:600;font-size:.88rem"></div><div id="sel-me" style="font-size:.72rem;opacity:.5;margin-top:2px"></div></div><button class="prev-x" onclick="clearVid()">✕</button></div>
+    <div class="qp-wrap">
+      <p class="qp-lbl">Quick picks — click to load instantly</p>
+      <div class="qp-grid">
+        <div class="qpc" onclick="qPick('https://www.vidking.net/embed/movie/1078605?color=e50914','🚀','Project Hail Mary','2026 · Sci-Fi')"><div class="qp-th" style="background:linear-gradient(135deg,#0a0a2e,#1a1a6e)">🚀</div><div><div class="qp-t">Project Hail Mary</div><div class="qp-m">2026 · Sci-Fi</div></div></div>
+        <div class="qpc" onclick="qPick('https://www.vidking.net/embed/tv/46952/1/1?color=e50914','🎭','Money Heist','S1E1 · Crime')"><div class="qp-th" style="background:linear-gradient(135deg,#6e0000,#c00)">🎭</div><div><div class="qp-t">Money Heist</div><div class="qp-m">S1E1 · Crime</div></div></div>
+        <div class="qpc" onclick="qPick('https://www.vidking.net/embed/tv/1396/1/1?color=e50914','⚗️','Breaking Bad','S1E1 · Drama')"><div class="qp-th" style="background:linear-gradient(135deg,#0a2e0a,#1a6e1a)">⚗️</div><div><div class="qp-t">Breaking Bad</div><div class="qp-m">S1E1 · Drama</div></div></div>
+        <div class="qpc" onclick="qPick('https://www.vidking.net/embed/tv/87108/1/1?color=e50914','🦑','Squid Game','S1E1 · Thriller')"><div class="qp-th" style="background:linear-gradient(135deg,#1a0a2e,#4a0080)">🦑</div><div><div class="qp-t">Squid Game</div><div class="qp-m">S1E1 · Thriller</div></div></div>
+        <div class="qpc" onclick="qPick('https://www.vidking.net/embed/tv/60625/1/1?color=e50914','🐱','Rick &amp; Morty','S1E1 · Comedy')"><div class="qp-th" style="background:linear-gradient(135deg,#002a2a,#007060)">🐱</div><div><div class="qp-t">Rick &amp; Morty</div><div class="qp-m">S1E1 · Comedy</div></div></div>
+        <div class="qpc" onclick="qPick('https://www.vidking.net/embed/movie/299536?color=e50914','🦸','Avengers: IW','2018 · Action')"><div class="qp-th" style="background:linear-gradient(135deg,#1a0a00,#6e2e00)">🦸</div><div><div class="qp-t">Avengers: IW</div><div class="qp-m">2018 · Action</div></div></div>
+      </div>
+    </div>
+    <button class="btn-r" id="v-load-btn" onclick="doLoadVid()" disabled>Load for Both →</button>
+    <p class="ferr" id="v-err"></p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-prof">
+  <div class="modal">
+    <div class="mhdr"><h3>Edit Profile</h3><button class="mx" onclick="closeModal('m-prof')">✕</button></div>
+    <div class="prof-av-wrap">
+      <div class="prof-av" id="prof-av"></div>
+      <label class="av-up-lbl">Change Photo<input type="file" id="av-file" accept="image/*" style="display:none" onchange="prevAvatar(this)"></label>
+      <p class="clr-lbl">or pick color</p>
+      <div class="clr-row">
+        <button class="clr" style="background:#e50914" onclick="pickClr('#e50914')"></button>
+        <button class="clr" style="background:#ff6b9d" onclick="pickClr('#ff6b9d')"></button>
+        <button class="clr" style="background:#f59e0b" onclick="pickClr('#f59e0b')"></button>
+        <button class="clr" style="background:#10b981" onclick="pickClr('#10b981')"></button>
+        <button class="clr" style="background:#6366f1" onclick="pickClr('#6366f1')"></button>
+        <button class="clr" style="background:#06b6d4" onclick="pickClr('#06b6d4')"></button>
+      </div>
+    </div>
+    <div class="fld"><label>Display Name</label><input id="pf-nm" type="text" maxlength="30"></div>
+    <div class="fld"><label>Bio</label><input id="pf-bio" type="text" maxlength="80" placeholder="something about you"></div>
+    <div class="fld"><label>New Password <em style="opacity:.35;font-weight:400">(blank = keep)</em></label><input id="pf-pw" type="password" placeholder="new password"></div>
+    <button class="btn-r" onclick="saveProfile()">Save Changes →</button>
+    <p class="ferr" id="pf-err"></p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-library">
+  <div class="modal modal-w">
+    <div class="mhdr"><h3>Saved Media Library</h3><button class="mx" onclick="closeModal('m-library')">✕</button></div>
+    <p class="modal-desc">Upload once, keep it on your account, and reuse it in any room. You can reorder your playlist here and permanently delete files after watching.</p>
+    <div class="media-budget media-budget-home">
+      <div class="media-budget-row"><span>Your server usage</span><span id="lib-budget-text">0 GB / 12 GB</span></div>
+      <div class="media-budget-track"><div class="media-budget-fill" id="lib-budget-fill"></div></div>
+      <p id="lib-budget-note">Files stay saved to this account until you delete them.</p>
+    </div>
+    <div class="media-hdr media-hdr-home">
+      <span>My Playlist</span>
+      <label class="up-lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> Upload<input type="file" id="home-up-inp" accept="video/*" style="display:none" onchange="uploadHomeMedia(this)"></label>
+    </div>
+    <div class="up-prog hidden" id="home-up-prog"><div class="up-track"><div class="up-fill" id="home-up-fill"></div></div><span id="home-up-lbl">Uploading…</span></div>
+    <div class="library-list" id="home-media-list"><div class="media-mt"><div style="font-size:2rem;opacity:.2">🎞</div><p>No saved media yet</p></div></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<div id="efloat" style="position:fixed;inset:0;pointer-events:none;z-index:9998;overflow:hidden"></div>
+<audio id="remote-audio" autoplay playsinline style="display:none"></audio>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>
