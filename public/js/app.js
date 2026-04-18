@@ -47,6 +47,7 @@ const S = {
   pendingClr: null,
   pendingAvFile: null,
   sidebarOpen: true,
+  libraryRenameTarget: null,
   // Owner clock for iframe sync
   _clock:  { playing:false, time:0, ts:Date.now() },
   _nativeVid: null,
@@ -57,19 +58,47 @@ const S = {
   _guestFrameClock: { playing:false, time:0, ts:Date.now() },
   _lastIframeState: null,
   // WebRTC
-  rtc: { pc:null, stream:null, inCall:false, muted:false, state:'idle', _connectTimer:null },
+  rtc: null,
 };
+
+function makeRtcState() {
+  return {
+    pc: null,
+    stream: null,
+    inCall: false,
+    muted: false,
+    state: 'idle',
+    _connectTimer: null,
+    makingOffer: false,
+    ignoreOffer: false,
+    pendingCandidates: [],
+    suppressHangup: false,
+    suppressNegotiation: false,
+    remoteUserId: null,
+    retryingIce: false,
+  };
+}
+S.rtc = makeRtcState();
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function api(method, path, body) {
   const h = { 'Content-Type':'application/json' };
   if (S.token) h.Authorization = 'Bearer ' + S.token;
   const r = await fetch('/api'+path, { method, headers:h, body:body?JSON.stringify(body):undefined });
-  const d = await r.json();
+  const ct = r.headers.get('content-type') || '';
+  const raw = await r.text();
+  let d = {};
+  if (raw) {
+    if (ct.includes('application/json')) {
+      try { d = JSON.parse(raw); } catch { throw new Error('Server returned invalid JSON'); }
+    } else {
+      throw new Error(raw.startsWith('<!DOCTYPE') || raw.startsWith('<html') ? 'Server returned HTML instead of JSON. Please restart/redeploy the server.' : 'Unexpected server response');
+    }
+  }
   if (!r.ok) throw new Error(d.error || 'Request failed');
   return d;
 }
-async function apiUpload(path, file, progIds) {
+async function apiUpload(path, file, progIds, extraFields = {}) {
   return await new Promise((resolve, reject) => {
     const prog = progIds?.prog ? $(progIds.prog) : null;
     const fill = progIds?.fill ? $(progIds.fill) : null;
@@ -79,6 +108,9 @@ async function apiUpload(path, file, progIds) {
     if (lbl) lbl.textContent = `Uploading ${file.name}…`;
     const form = new FormData();
     form.append('video', file);
+    Object.entries(extraFields || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') form.append(key, value);
+    });
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api'+path);
     if (S.token) xhr.setRequestHeader('Authorization', 'Bearer ' + S.token);
@@ -181,6 +213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   $('v-url').addEventListener('input', e => onVidUrl(e.target));
   initLobbyAudio();
+  initHomeHeroScene();
 });
 
 // ── Noise canvas ──────────────────────────────────────────────────────────────
@@ -257,6 +290,59 @@ function buildHomeCards() {
   bAv.style.background = iDisha ? '#e50914' : '#ff6b9d';
   bAv.textContent = iDisha ? 'A' : 'D';
 }
+function initHomeHeroScene() {
+  const stage = $('home-scene');
+  if (!stage || stage.dataset.ready === 'true') return;
+  stage.dataset.ready = 'true';
+  const pupils = [...stage.querySelectorAll('.hero-pupil')];
+  const setSceneState = (clientX, clientY) => {
+    const rect = stage.getBoundingClientRect();
+    const px = ((clientX - rect.left) / rect.width - 0.5) * 2;
+    const py = ((clientY - rect.top) / rect.height - 0.5) * 2;
+    stage.style.setProperty('--scene-rx', (px * 7).toFixed(2));
+    stage.style.setProperty('--scene-ry', (py * -6).toFixed(2));
+    pupils.forEach(pupil => {
+      const eye = pupil.parentElement;
+      if (!eye) return;
+      const eRect = eye.getBoundingClientRect();
+      const dx = clientX - (eRect.left + eRect.width / 2);
+      const dy = clientY - (eRect.top + eRect.height / 2);
+      const angle = Math.atan2(dy, dx);
+      const distance = Math.min(10, Math.hypot(dx, dy) * 0.08);
+      pupil.style.setProperty('--pupil-x', `${Math.cos(angle) * distance}px`);
+      pupil.style.setProperty('--pupil-y', `${Math.sin(angle) * distance}px`);
+    });
+  };
+  const resetSceneState = () => {
+    stage.style.setProperty('--scene-rx', '0');
+    stage.style.setProperty('--scene-ry', '0');
+    pupils.forEach(pupil => {
+      pupil.style.setProperty('--pupil-x', '0px');
+      pupil.style.setProperty('--pupil-y', '0px');
+    });
+  };
+  stage.addEventListener('pointermove', e => setSceneState(e.clientX, e.clientY));
+  stage.addEventListener('pointerleave', resetSceneState);
+  resetSceneState();
+}
+
+function buildHomeCards() {
+  const u = S.user; if (!u) return;
+  const iDisha = u.username === 'disha';
+  const partnerName = iDisha ? 'Ashish' : 'Disha';
+  if ($('home-main-name')) $('home-main-name').textContent = u.displayName;
+  if ($('home-main-bio')) $('home-main-bio').textContent = u.bio || 'The Owner';
+  if ($('home-partner-name')) $('home-partner-name').textContent = partnerName;
+  if ($('home-partner-bio')) $('home-partner-bio').textContent = iDisha ? 'The Owner' : 'The Co-star';
+  if ($('h-greet')) $('h-greet').textContent = `${S.user.displayName}'s cinema is ready`;
+  const mainFace = $('home-main-face');
+  const partnerFace = $('home-partner-face');
+  const pillFace = $('home-pill-face');
+  if (mainFace) mainFace.style.background = `linear-gradient(180deg, ${u.avatarColor || '#ffd119'}, #ffbc02)`;
+  if (partnerFace) partnerFace.style.background = iDisha ? '#ff5f24' : '#ff6b9d';
+  if (pillFace) pillFace.style.background = iDisha ? 'linear-gradient(180deg,#f46b81,#d867cb)' : 'linear-gradient(180deg,#ff7e5f,#ff4d6d)';
+}
+
 function resetPlayerUI() {
   stopAllTimers();
   if(S._nativeVid){S._nativeVid.remove();S._nativeVid=null;}
@@ -411,11 +497,19 @@ function connectSocket(room, password) {
     if(S.isOwner&&!was){toast('You are now the Owner ★');sysMsg('You became the owner');}
     updateRoomUI(r);
     startSyncTimers();
+    if (!partnerIsOnline() && (S.rtc.inCall || S.rtc.state === 'calling' || S.rtc.state === 'connecting')) {
+      stopCallLocally({ reason:'Partner is no longer available', notify:false, silent:true });
+    }
   });
 
   S.socket.on('owner_changed',({user})=>{sysMsg(`${user.displayName} is now the owner ★`);toast(`${user.displayName} is now the owner`);});
   S.socket.on('user_joined', ({user})=>{sysMsg(`${user.displayName} joined ✨`);toast(`${user.displayName} is here!`);if(S.isOwner)sendHeartbeat();});
-  S.socket.on('user_left',   ({user})=>sysMsg(`${user.displayName} left`));
+  S.socket.on('user_left',   ({user})=>{
+    sysMsg(`${user.displayName} left`);
+    if (S.rtc.inCall || S.rtc.state === 'calling' || S.rtc.state === 'connecting') {
+      stopCallLocally({ reason:'Partner left the room', notify:false, silent:true });
+    }
+  });
 
   // ── BUG FIX #2/#3: Sync ───────────────────────────────────────────────────
   S.socket.on('sync_init',({playing,time})=>{
@@ -460,9 +554,9 @@ function connectSocket(room, password) {
   S.socket.on('partner_mute',({user,muted})=>setPartnerMuteUI(user,muted));
 
   // WebRTC
-  S.socket.on('rtc_offer',  ({offer})   =>handleRtcOffer(offer));
-  S.socket.on('rtc_answer', ({answer})  =>handleRtcAnswer(answer));
-  S.socket.on('rtc_ice',    ({candidate})=>handleRtcIce(candidate));
+  S.socket.on('rtc_offer',  ({offer,from})     =>handleRtcOffer(offer, from));
+  S.socket.on('rtc_answer', ({answer,from})    =>handleRtcAnswer(answer, from));
+  S.socket.on('rtc_ice',    ({candidate,from}) =>handleRtcIce(candidate, from));
   S.socket.on('rtc_hangup', ()          =>handleRtcHangup());
 }
 
@@ -933,8 +1027,9 @@ async function uploadLibraryMedia(input, progIds) {
   input.value = '';
   try {
     const res = await apiUpload('/library/upload', file, progIds);
+    S.libraryRenameTarget = res.video?.id || null;
     setLibraryState(res.items, res.usage);
-    toast(progIds.success || 'Upload complete!');
+    toast('Saved to library. Rename it if you want.');
   } catch (e) {
     toast(e.message);
   }
@@ -970,6 +1065,30 @@ window.deleteLibraryItem = async mediaId => {
     toast(e.message);
   }
 };
+window.renameLibraryItem = async (mediaId, newName) => {
+  const name = String(newName || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+  if (!name) {
+    toast('Enter a video name');
+    return false;
+  }
+  try {
+    let res;
+    try {
+      res = await api('PATCH', '/library/' + mediaId, { name });
+    } catch (err) {
+      const msg = String(err?.message || '');
+      if (!/HTML instead of JSON|Unexpected server response/i.test(msg)) throw err;
+      res = await api('POST', '/library/' + mediaId + '/rename', { name });
+    }
+    S.libraryRenameTarget = null;
+    setLibraryState(res.items, res.usage);
+    toast('Video name updated');
+    return true;
+  } catch (e) {
+    toast(e.message);
+    return false;
+  }
+};
 function renderMediaList(vs){
   const list=$('media-list'); if(!list)return;
   if (S.room) S.room.uploadedVideos = Array.isArray(vs) ? vs : [];
@@ -985,15 +1104,82 @@ function makeMediaItem(v, opts = {}) {
   const ownerPill = opts.showOwner ? `<span class="mi-owner"><span class="mi-owner-dot" style="background:${v.ownerAvatarColor||'#444'}">${esc(v.ownerAvatar||'?')}</span>${esc(v.ownerName||'You')}</span>` : '';
   d.innerHTML=`<span style="font-size:1.1rem">🎬</span><div class="mi-main"><div class="mi-nm" title="${esc(v.originalName)}">${esc(v.originalName)}</div><div class="mi-meta">${ownerPill}<span class="mi-sz">${fmtSz(v.size)}</span></div></div><div class="mi-actions"></div>`;
   const actions = d.querySelector('.mi-actions');
+  const main = d.querySelector('.mi-main');
+  const nameEl = d.querySelector('.mi-nm');
+  let isEditing = false;
+  const renameWrap = document.createElement('div');
+  renameWrap.className = 'mi-rename hidden';
+  const renameInput = document.createElement('input');
+  renameInput.className = 'mi-rename-inp';
+  renameInput.type = 'text';
+  renameInput.maxLength = 120;
+  renameInput.value = v.originalName || '';
+  renameInput.setAttribute('aria-label', 'Rename saved video');
+  const renameSave = document.createElement('button');
+  renameSave.className = 'mi-rename-btn save';
+  renameSave.type = 'button';
+  renameSave.textContent = 'Save';
+  const renameCancel = document.createElement('button');
+  renameCancel.className = 'mi-rename-btn';
+  renameCancel.type = 'button';
+  renameCancel.textContent = 'Cancel';
+  renameWrap.append(renameInput, renameSave, renameCancel);
+  main.appendChild(renameWrap);
+  const openRename = () => {
+    if (!opts.editable) return;
+    isEditing = true;
+    d.classList.add('editing');
+    renameWrap.classList.remove('hidden');
+    nameEl.classList.add('hidden');
+    renameInput.value = v.originalName || '';
+    setTimeout(() => {
+      renameInput.focus();
+      renameInput.select();
+    }, 0);
+  };
+  const closeRename = () => {
+    isEditing = false;
+    d.classList.remove('editing');
+    renameWrap.classList.add('hidden');
+    nameEl.classList.remove('hidden');
+    renameInput.value = v.originalName || '';
+    if (S.libraryRenameTarget === v.id) S.libraryRenameTarget = null;
+  };
+  renameSave.onclick = async e => {
+    e.stopPropagation();
+    const ok = await renameLibraryItem(v.id, renameInput.value);
+    if (ok) closeRename();
+  };
+  renameCancel.onclick = e => {
+    e.stopPropagation();
+    closeRename();
+  };
+  renameInput.addEventListener('click', e => e.stopPropagation());
+  renameInput.addEventListener('keydown', async e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const ok = await renameLibraryItem(v.id, renameInput.value);
+      if (ok) closeRename();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeRename();
+    }
+  });
   if (S.room) {
     const play=document.createElement('button');
     play.className='mi-btn play'; play.title='Play for both';
     play.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
     play.onclick=e=>{e.stopPropagation();playMediaItem(v);};
     actions.appendChild(play);
-    d.addEventListener('click',()=>playMediaItem(v));
+    d.addEventListener('click',()=>{ if (!isEditing) playMediaItem(v); });
   }
   if (opts.editable) {
+    const rename=document.createElement('button');
+    rename.className='mi-btn ord'; rename.title='Rename video';
+    rename.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 113 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
+    rename.onclick=e=>{e.stopPropagation();openRename();};
+    actions.appendChild(rename);
     const up=document.createElement('button');
     up.className='mi-btn ord'; up.title='Move up';
     up.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
@@ -1010,6 +1196,7 @@ function makeMediaItem(v, opts = {}) {
     del.onclick=e=>{e.stopPropagation();deleteLibraryItem(v.id);};
     actions.appendChild(del);
   }
+  if (opts.editable && S.libraryRenameTarget === v.id) openRename();
   return d;
 }
 function playMediaItem(v){
@@ -1043,6 +1230,53 @@ const RTC_CFG={iceServers:[
 ]};
 const RTC_STATES=['idle','calling','connecting','connected','failed'];
 
+function partnerIsOnline() {
+  if (!S.room?.onlineUsers?.length || !S.user?.id) return false;
+  return [...new Set(S.room.onlineUsers)].some(id => id && id !== S.user.id);
+}
+
+function isPolitePeer(remoteUserId) {
+  const mine = String(S.user?.id || '');
+  const theirs = String(remoteUserId || '');
+  if (!mine || !theirs) return true;
+  return mine.localeCompare(theirs) > 0;
+}
+
+async function ensureRtcStream() {
+  const hasLiveTrack = S.rtc.stream?.getAudioTracks().some(t => t.readyState === 'live');
+  if (hasLiveTrack) return S.rtc.stream;
+  S.rtc.stream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+  S.rtc.muted = false;
+  $('cb-mute')?.classList.remove('muted');
+  return S.rtc.stream;
+}
+
+async function flushPendingIce() {
+  if (!S.rtc.pc?.remoteDescription) return;
+  const pending = S.rtc.pendingCandidates.splice(0);
+  for (const candidate of pending) {
+    try {
+      await S.rtc.pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch {}
+  }
+}
+
+function attachLocalTracks() {
+  if (!S.rtc.pc || !S.rtc.stream) return;
+  const senders = S.rtc.pc.getSenders();
+  S.rtc.stream.getTracks().forEach(track => {
+    const alreadySending = senders.some(sender => sender.track?.id === track.id);
+    if (!alreadySending) S.rtc.pc.addTrack(track, S.rtc.stream);
+  });
+}
+
+function resetRemoteAudio() {
+  const a = $('remote-audio');
+  if (!a) return;
+  a.pause?.();
+  a.srcObject = null;
+}
+
 function setRtcState(state,label){
   S.rtc.state=state;
   const dot=$('cb-dot'); if(dot){dot.className='cb-dot '+state;}
@@ -1053,11 +1287,16 @@ window.toggleVoice=async()=>{S.rtc.inCall?endCall():await startCall();};
 
 async function startCall(){
   if(!S.socket||!S.room){toast('Join a room first');return;}
-  if(S.rtc.inCall)return;
+  if(S.rtc.inCall || S.rtc.state === 'calling' || S.rtc.state === 'connecting') return;
+  if(!partnerIsOnline()){toast('Wait for your partner to join first');return;}
   try{
-    S.rtc.stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    await ensureRtcStream();
     setupPc('caller');
-    S.rtc.stream.getTracks().forEach(t=>S.rtc.pc.addTrack(t,S.rtc.stream));
+    attachLocalTracks();
+    setCallUI(true);
+    setRtcState('calling','Callingâ€¦');
+    S.rtc.inCall=true;
+    S.rtc.makingOffer = true;
     const offer=await S.rtc.pc.createOffer({offerToReceiveAudio:true});
     await S.rtc.pc.setLocalDescription(offer);
     S.socket.emit('rtc_offer',{roomId:S.room.id,offer});
@@ -1130,6 +1369,184 @@ function setCallUI(active,status){
   $('voice-btn')?.classList.toggle('active',active);
   if(status&&$('cb-status')) $('cb-status').textContent=status;
 }
+
+function stopCallLocally({ notify=false, silent=false, reason='' } = {}){
+  S.rtc.suppressNegotiation = true;
+  const shouldNotify = notify && S.socket && S.room && S.rtc.inCall && !S.rtc.suppressHangup;
+  S.rtc.suppressHangup = true;
+  clearTimeout(S.rtc._connectTimer);
+  if(shouldNotify) S.socket.emit('rtc_hangup',{roomId:S.room.id});
+  S.rtc.stream?.getTracks().forEach(t=>t.stop());
+  S.rtc.pc?.close();
+  resetRemoteAudio();
+  S.rtc = makeRtcState();
+  setCallUI(false);
+  $('cb-partner-mute')?.classList.add('hidden');
+  $('vwh-mute')?.classList.add('hidden');
+  $('vwg-mute')?.classList.add('hidden');
+  if (reason && !silent) toast(reason);
+}
+
+async function startCall(){
+  if(!S.socket||!S.room){toast('Join a room first');return;}
+  if(S.rtc.inCall || S.rtc.state === 'calling' || S.rtc.state === 'connecting') return;
+  if(!partnerIsOnline()){toast('Wait for your partner to join first');return;}
+  try{
+    await ensureRtcStream();
+    setupPc('caller');
+    S.rtc.suppressNegotiation = true;
+    attachLocalTracks();
+    setCallUI(true);
+    setRtcState('calling','Calling...');
+    S.rtc.inCall = true;
+    S.rtc.makingOffer = true;
+    const offer = await S.rtc.pc.createOffer({offerToReceiveAudio:true});
+    await S.rtc.pc.setLocalDescription(offer);
+    S.socket.emit('rtc_offer',{roomId:S.room.id,offer});
+    clearTimeout(S.rtc._connectTimer);
+    S.rtc._connectTimer = setTimeout(() => {
+      if (S.rtc.state !== 'connected') {
+        toast('No answer - call ended');
+        stopCallLocally({ notify:true, silent:true });
+      }
+    }, 20000);
+  }catch(ex){
+    toast('Mic error: '+ex.message);
+    stopCallLocally({ notify:false, silent:true });
+  }finally{
+    S.rtc.suppressNegotiation = false;
+    S.rtc.makingOffer = false;
+  }
+}
+
+function setupPc(role){
+  if(S.rtc.pc){S.rtc.pc.close();S.rtc.pc=null;}
+  const pc=new RTCPeerConnection(RTC_CFG);
+  pc.ontrack=e=>{
+    const a=$('remote-audio');
+    if(a){
+      a.srcObject=e.streams[0];
+      a.play?.().catch(()=>{});
+    }
+  };
+  pc.onicecandidate=e=>{if(e.candidate&&S.socket&&S.room)S.socket.emit('rtc_ice',{roomId:S.room.id,candidate:e.candidate});};
+  pc.onnegotiationneeded=async()=>{
+    if (!S.socket || !S.room || pc.signalingState !== 'stable' || S.rtc.makingOffer || S.rtc.suppressNegotiation) return;
+    try{
+      S.rtc.makingOffer = true;
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      S.socket.emit('rtc_offer',{roomId:S.room.id,offer});
+      S.rtc.inCall = true;
+      if (S.rtc.state === 'idle') {
+        setCallUI(true);
+        setRtcState('connecting','Connecting...');
+      }
+    }catch{}
+    finally{
+      S.rtc.makingOffer = false;
+    }
+  };
+  pc.oniceconnectionstatechange=()=>{
+    const iceState = pc.iceConnectionState;
+    if (iceState === 'connected' || iceState === 'completed') {
+      S.rtc.retryingIce = false;
+      clearTimeout(S.rtc._connectTimer);
+      setRtcState('connected','In call');
+    } else if (iceState === 'disconnected') {
+      setRtcState('connecting','Reconnecting...');
+    } else if (iceState === 'failed') {
+      if (!S.rtc.retryingIce && typeof pc.restartIce === 'function') {
+        S.rtc.retryingIce = true;
+        setRtcState('connecting','Reconnecting...');
+        try { pc.restartIce(); } catch {}
+      } else {
+        setRtcState('failed','Call failed');
+        toast('Call failed');
+        stopCallLocally({ notify:true, silent:true });
+      }
+    }
+  };
+  pc.onconnectionstatechange=()=>{
+    const st=pc.connectionState;
+    if(st==='connected'){
+      clearTimeout(S.rtc._connectTimer);
+      S.rtc.retryingIce = false;
+      setRtcState('connected','In call');
+      toast('Call connected!');
+    }
+    if(st==='disconnected') setRtcState('connecting','Reconnecting...');
+    if(st==='failed'){
+      setRtcState('failed','Call failed');
+      toast('Call failed');
+      stopCallLocally({ notify:true, silent:true });
+    }
+    if(st==='closed' && S.rtc.state !== 'idle') setRtcState('idle','Call ended');
+  };
+  pc.onsignalingstatechange=()=>{ if (pc.signalingState === 'stable') S.rtc.ignoreOffer = false; };
+  S.rtc.pc=pc;
+}
+
+async function handleRtcOffer(offer, from){
+  if(!S.socket||!S.room)return;
+  try{
+    const polite = isPolitePeer(from);
+    const offerCollision = S.rtc.makingOffer || (S.rtc.pc && S.rtc.pc.signalingState !== 'stable');
+    S.rtc.ignoreOffer = !polite && offerCollision;
+    if (S.rtc.ignoreOffer) return;
+    await ensureRtcStream();
+    if (!S.rtc.pc) setupPc('answerer');
+    if (offerCollision && S.rtc.pc.signalingState === 'have-local-offer') {
+      await S.rtc.pc.setLocalDescription({ type:'rollback' });
+    }
+    S.rtc.suppressNegotiation = true;
+    attachLocalTracks();
+    S.rtc.remoteUserId = from || S.rtc.remoteUserId;
+    await S.rtc.pc.setRemoteDescription(new RTCSessionDescription(offer));
+    await flushPendingIce();
+    const answer=await S.rtc.pc.createAnswer();
+    await S.rtc.pc.setLocalDescription(answer);
+    S.socket.emit('rtc_answer',{roomId:S.room.id,answer});
+    S.rtc.inCall=true;
+    setCallUI(true);
+    setRtcState('connecting','Connecting...');
+  }catch(ex){
+    toast('Call error: '+ex.message);
+    stopCallLocally({ notify:false, silent:true });
+  }finally{
+    S.rtc.suppressNegotiation = false;
+  }
+}
+
+async function handleRtcAnswer(a, from){
+  if(!S.rtc.pc) return;
+  try{
+    S.rtc.remoteUserId = from || S.rtc.remoteUserId;
+    await S.rtc.pc.setRemoteDescription(new RTCSessionDescription(a));
+    await flushPendingIce();
+    setRtcState('connecting','Connecting...');
+  }catch{}
+}
+
+async function handleRtcIce(c, from){
+  if (from) S.rtc.remoteUserId = from;
+  if(!S.rtc.pc || !S.rtc.pc.remoteDescription){
+    S.rtc.pendingCandidates.push(c);
+    return;
+  }
+  try{await S.rtc.pc.addIceCandidate(new RTCIceCandidate(c));}catch{}
+}
+
+function handleRtcHangup(){
+  if (S.rtc.state === 'idle' && !S.rtc.inCall) return;
+  sysMsg('Partner ended the call');
+  stopCallLocally({ notify:false, silent:true });
+}
+
+function endCall(){
+  stopCallLocally({ notify:true });
+}
+window.endCall=endCall;
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}

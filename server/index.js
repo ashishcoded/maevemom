@@ -120,6 +120,27 @@ function pubMediaItem(item) {
     order: item.order,
   };
 }
+function normalizeMediaDisplayName(rawName, fallbackName) {
+  const fallback = String(fallbackName || 'Video').trim() || 'Video';
+  const cleaned = String(rawName || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+  return cleaned || fallback;
+}
+function renameLibraryItemForUser(userId, mediaId, nextName) {
+  const library = ensureLibrary(userId);
+  const item = library.find(entry => entry.id === mediaId);
+  if (!item) return null;
+  item.originalName = normalizeMediaDisplayName(nextName, item.originalName || item.filename);
+  saveLibraries();
+  refreshRoomsForUser(userId);
+  return {
+    ok:true,
+    items: library.slice().sort((a,b)=>a.order-b.order).map(pubMediaItem),
+    usage: budgetSummary(userId),
+  };
+}
 function combinedRoomMedia(room) {
   const userIds = [room.ownerId, room.guestId].filter((id, idx, arr) => id && arr.indexOf(id) === idx);
   return userIds.flatMap((userId, slot) =>
@@ -332,8 +353,9 @@ app.post('/api/library/upload', authMw, uploadVideo.single('video'), (req,res) =
     }
     const userId = req.user.userId;
     const library = ensureLibrary(userId);
+    const displayName = normalizeMediaDisplayName(req.body?.customName, req.file.originalname);
     const entry={id:uuidv4().slice(0,8),ownerId:userId,filename:req.file.filename,
-      originalName:req.file.originalname,url:'/uploads/'+req.file.filename,
+      originalName:displayName,url:'/uploads/'+req.file.filename,
       size:req.file.size,uploadedAt:Date.now(),order:library.length};
     library.push(entry);
     saveLibraries();
@@ -361,6 +383,24 @@ app.patch('/api/library/order', authMw, (req,res) => {
       items: ensureLibrary(userId).slice().sort((a,b)=>a.order-b.order).map(pubMediaItem),
       usage: budgetSummary(userId),
     });
+  } catch(e){res.status(500).json({error:e.message});}
+});
+
+app.patch('/api/library/:mediaId', authMw, (req,res) => {
+  try {
+    const userId = req.user.userId;
+    const payload = renameLibraryItemForUser(userId, req.params.mediaId, req.body?.name);
+    if (!payload) return res.status(404).json({error:'Media not found'});
+    res.json(payload);
+  } catch(e){res.status(500).json({error:e.message});}
+});
+
+app.post('/api/library/:mediaId/rename', authMw, (req,res) => {
+  try {
+    const userId = req.user.userId;
+    const payload = renameLibraryItemForUser(userId, req.params.mediaId, req.body?.name);
+    if (!payload) return res.status(404).json({error:'Media not found'});
+    res.json(payload);
   } catch(e){res.status(500).json({error:e.message});}
 });
 
