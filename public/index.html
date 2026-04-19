@@ -179,6 +179,7 @@
           <button class="vbtn" onclick="openInvitePanel()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg> Invite</button>
           <button class="vbtn vbtn-exit" onclick="leaveRoom()" title="Leave room"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg> Exit</button>
           <button class="vbtn sb-toggle-btn" id="sb-toggle-btn" onclick="toggleSidebar()" title="Toggle panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+          <button class="vbtn" id="fs-btn" onclick="toggleFullscreen()" title="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg></button>
         </div>
       </div>
 
@@ -217,6 +218,82 @@
           allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
           referrerpolicy="no-referrer-when-downgrade"
           style="display:none;width:100%;height:100%;border:none"></iframe>
+        <div class="player-chrome" id="player-chrome" aria-hidden="true">
+          <div class="player-topbar">
+            <div class="player-live-pill" id="player-live-pill">
+              <span class="player-live-dot"></span>
+              <span id="player-live-text">0 live</span>
+            </div>
+            <div class="player-top-actions">
+              <button class="player-top-btn" id="player-panel-btn" onclick="toggleSidebar()" title="Show or hide panel">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+                <span>Panel</span>
+              </button>
+              <button class="player-top-btn" id="player-chat-btn" onclick="toggleOverlayChat()" title="Hide chat overlay">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                <span id="player-chat-btn-text">Hide Chat</span>
+              </button>
+              <button class="player-top-btn" id="player-settings-btn" onclick="openChatSettings()" title="Chat settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 005 15.4a1.65 1.65 0 00-1.51-1H3.4a2 2 0 010-4h.09A1.65 1.65 0 005 8.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009.32 4.6h.18A1.65 1.65 0 0011 3.09V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019 8.6v.18A1.65 1.65 0 0020.51 10h.09a2 2 0 010 4h-.09A1.65 1.65 0 0019 15.4z"/></svg>
+                <span>Settings</span>
+              </button>
+              <button class="player-top-btn" id="player-invite-btn" onclick="openInvitePanel()" title="Invite">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                <span>Invite</span>
+              </button>
+              <button class="player-top-btn" id="player-load-btn" onclick="openVideoModal()" title="Load content">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Load</span>
+              </button>
+              <button class="player-top-btn danger" id="player-exit-btn" onclick="toggleFullscreen()" title="Exit zoom">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>
+                <span>Exit Zoom</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="float-chat hidden" id="float-chat">
+          <div class="fc-msgs" id="fc-msgs"></div>
+          <div class="fc-quick" id="fc-quick">
+            <div class="quick-row compact">
+              <div class="quick-scroller">
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('fc-emoji-strip',-1)" aria-label="Scroll emojis left">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <div class="quick-strip emoji-strip compact" id="fc-emoji-strip"></div>
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('fc-emoji-strip',1)" aria-label="Scroll emojis right">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="quick-row compact">
+              <div class="quick-scroller">
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('fc-template-strip',-1)" aria-label="Scroll texts left">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <div class="quick-strip compact" id="fc-template-strip"></div>
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('fc-template-strip',1)" aria-label="Scroll texts right">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="quick-row compact sticker-row">
+              <div class="quick-scroller">
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('fc-sticker-strip',-1)" aria-label="Scroll stickers left">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <div class="quick-strip sticker-strip compact" id="fc-sticker-strip"></div>
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('fc-sticker-strip',1)" aria-label="Scroll stickers right">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="fc-in">
+            <textarea id="fc-inp" rows="1" placeholder="Message..." oninput="fcInputH(this)" onkeydown="fcKeyH(event)"></textarea>
+            <button onclick="fcSend()"><svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
+          </div>
+        </div>
       </div>
 
       <!-- Sync strip -->
@@ -241,6 +318,17 @@
           <div class="vw-info vw-info-r"><span class="vw-n" id="vwg-nm">Waiting…</span><span class="vw-r">Guest</span></div>
           <div class="vw-av vw-av-g" id="vwg-av">?</div>
         </div>
+        <div class="room-corner-actions">
+          <div class="chat-vis-wrap">
+            <button class="chat-action-btn" id="chat-vis-btn" onclick="toggleChatVisibility()" title="Hide/show chat">
+              <span id="chat-vis-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            </button>
+            <span class="chat-unread-badge hidden" id="chat-unread-badge">0</span>
+          </div>
+          <button class="chat-action-btn" id="chat-settings-btn" onclick="openChatSettings()" title="Chat settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 005 15.4a1.65 1.65 0 00-1.51-1H3.4a2 2 0 010-4h.09A1.65 1.65 0 005 8.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009.32 4.6h.18A1.65 1.65 0 0011 3.09V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019 8.6v.18A1.65 1.65 0 0020.51 10h.09a2 2 0 010 4h-.09A1.65 1.65 0 0019 15.4z"/></svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -254,17 +342,91 @@
 
       <!-- CHAT -->
       <div class="sb-panel active" id="p-chat">
-        <div class="emj-strip" id="emj-strip"></div>
-        <div class="chat-box" id="chat-box">
-          <div class="chat-mt"><div class="cmt-icon">💬</div><p>Say hello!</p></div>
+        <!-- Chat header with visibility toggle -->
+        <div class="chat-panel-hdr">
+          <div class="emj-strip" id="emj-strip"></div>
+          <div class="chat-hdr-actions">
+            <!-- Templates button -->
+            <div class="tpl-wrap">
+              <button class="chat-action-btn" id="tpl-btn" onclick="toggleTemplatePanel()" title="Message templates">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+              <!-- Templates panel -->
+              <div class="template-panel hidden" id="template-panel">
+                <div class="tpl-head">
+                  <span>Templates</span>
+                  <button class="tpl-close" onclick="toggleTemplatePanel()">✕</button>
+                </div>
+                <div class="template-list" id="template-list"></div>
+                <div class="tpl-add">
+                  <input id="tpl-input" type="text" placeholder="New template message…" maxlength="500" onkeydown="if(event.key==='Enter')addTemplate()">
+                  <button onclick="addTemplate()">Save</button>
+                </div>
+              </div>
+            </div>
+            <button class="chat-action-btn legacy-chat-action" id="legacy-chat-settings-btn" onclick="openChatSettings()" title="Chat settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 005 15.4a1.65 1.65 0 00-1.51-1H3.4a2 2 0 010-4h.09A1.65 1.65 0 005 8.6a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009.32 4.6h.18A1.65 1.65 0 0011 3.09V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019 8.6v.18A1.65 1.65 0 0020.51 10h.09a2 2 0 010 4h-.09A1.65 1.65 0 0019 15.4z"/></svg>
+            </button>
+            <!-- Chat visibility toggle with unread badge -->
+            <div class="chat-vis-wrap legacy-chat-action">
+              <button class="chat-action-btn" id="legacy-chat-vis-btn" onclick="toggleChatVisibility()" title="Hide/show chat">
+                <span id="legacy-chat-vis-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              </button>
+              <span class="chat-unread-badge hidden" id="legacy-chat-unread-badge">0</span>
+            </div>
+          </div>
         </div>
-        <div class="typing-bar hidden" id="typing-bar">
-          <div class="tdots"><span></span><span></span><span></span></div>
-          <span id="t-who"></span> is typing…
-        </div>
-        <div class="chat-in">
-          <textarea id="chat-inp" rows="1" placeholder="Type something…" oninput="chatInputH(this)" onkeydown="chatKeyH(event)"></textarea>
-          <button class="chat-send" onclick="sendChat()"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
+        <!-- Chat inner (hideable) -->
+        <div id="chat-inner">
+          <div class="chat-box" id="chat-box">
+            <div class="chat-mt"><div class="cmt-icon">💬</div><p>Say hello!</p></div>
+          </div>
+          <div class="typing-bar hidden" id="typing-bar">
+            <div class="tdots"><span></span><span></span><span></span></div>
+            <span id="t-who"></span> is typing…
+          </div>
+          <div class="chat-quick-actions" id="chat-quick-actions">
+            <div class="quick-row">
+              <span class="quick-label">Emojis</span>
+              <div class="quick-scroller">
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('chat-emoji-strip',-1)" aria-label="Scroll emojis left">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <div class="quick-strip emoji-strip" id="chat-emoji-strip"></div>
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('chat-emoji-strip',1)" aria-label="Scroll emojis right">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="quick-row">
+              <span class="quick-label">Texts</span>
+              <div class="quick-scroller">
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('chat-template-strip',-1)" aria-label="Scroll texts left">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <div class="quick-strip" id="chat-template-strip"></div>
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('chat-template-strip',1)" aria-label="Scroll texts right">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="quick-row sticker-row">
+              <span class="quick-label">Stickers</span>
+              <div class="quick-scroller">
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('chat-sticker-strip',-1)" aria-label="Scroll stickers left">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <div class="quick-strip sticker-strip" id="chat-sticker-strip"></div>
+                <button class="quick-nav" type="button" onclick="scrollQuickRow('chat-sticker-strip',1)" aria-label="Scroll stickers right">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="chat-in">
+            <textarea id="chat-inp" rows="1" placeholder="Type something…" oninput="chatInputH(this)" onkeydown="chatKeyH(event)"></textarea>
+            <button class="chat-send" onclick="sendChat()"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
+          </div>
         </div>
       </div>
 
@@ -307,15 +469,16 @@
       </div>
     </div>
 
-    <!-- FLOATING CHAT (shown when sidebar is hidden) -->
-    <div class="float-chat hidden" id="float-chat">
-      <div class="fc-msgs" id="fc-msgs"></div>
-      <div class="fc-emj" id="fc-emj"></div>
+    <!-- FLOATING CHAT — fully transparent, text only, no panel -->
+    <div class="float-chat hidden legacy-float-chat" aria-hidden="true">
+      <div class="fc-msgs" id="legacy-fc-msgs"></div>
+      <div class="fc-emj" id="legacy-fc-emj"></div>
       <div class="fc-in">
-        <textarea id="fc-inp" rows="1" placeholder="Message…" oninput="fcInputH(this)" onkeydown="fcKeyH(event)"></textarea>
+        <textarea id="legacy-fc-inp" rows="1" placeholder="Message…" tabindex="-1"></textarea>
         <button onclick="fcSend()"><svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
       </div>
     </div>
+    <div id="room-efloat" class="room-efloat" aria-hidden="true"></div>
   </div>
 </div>
 
@@ -406,6 +569,77 @@
     </div>
     <div class="up-prog hidden" id="home-up-prog"><div class="up-track"><div class="up-fill" id="home-up-fill"></div></div><span id="home-up-lbl">Uploading…</span></div>
     <div class="library-list" id="home-media-list"><div class="media-mt"><div style="font-size:2rem;opacity:.2">🎞</div><p>No saved media yet</p></div></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="m-chat-settings">
+  <div class="modal modal-w chat-settings-modal">
+    <div class="mhdr"><h3>Chat Settings</h3><button class="mx" onclick="closeModal('m-chat-settings')">âœ•</button></div>
+    <p class="modal-desc">Choose the reactions and one-tap messages available during playback, then manage PNG stickers for the room chat experience.</p>
+
+    <div class="chat-settings-section">
+      <div class="chat-settings-head">
+        <h4>Playback Emojis</h4>
+        <button class="settings-inline-btn" type="button" onclick="resetEnabledEmojis()">Reset</button>
+      </div>
+      <div class="settings-emoji-grid" id="settings-emoji-grid"></div>
+      <div class="settings-add-row">
+        <input id="settings-emoji-input" type="text" maxlength="16" placeholder="Add custom emoji like 😀" onkeydown="if(event.key==='Enter')addCustomEmoji()">
+        <button type="button" onclick="addCustomEmoji()">Add Emoji</button>
+      </div>
+    </div>
+
+    <div class="chat-settings-section">
+      <div class="chat-settings-head">
+        <h4>Quick Texts</h4>
+        <button class="settings-inline-btn" type="button" onclick="resetTemplates()">Defaults</button>
+      </div>
+      <div class="settings-text-list" id="settings-template-list"></div>
+      <div class="settings-add-row">
+        <input id="settings-template-input" type="text" maxlength="500" placeholder="Add a quick message..." onkeydown="if(event.key==='Enter')addTemplateFromSettings()">
+        <button type="button" onclick="addTemplateFromSettings()">Add</button>
+      </div>
+    </div>
+
+    <div class="chat-settings-section">
+      <div class="chat-settings-head">
+        <h4>Chat Text Style</h4>
+      </div>
+      <div class="settings-style-grid">
+        <label class="settings-style-field">
+          <span>Font Size</span>
+          <div class="settings-range-wrap">
+            <input id="settings-text-size" type="range" min="12" max="22" step="1" oninput="updateChatTextStyle('size', this.value)">
+            <strong id="settings-text-size-val">14px</strong>
+          </div>
+        </label>
+        <label class="settings-style-field">
+          <span>Text Color</span>
+          <input id="settings-text-color" type="color" value="#f5f5f5" onchange="updateChatTextStyle('color', this.value)">
+        </label>
+        <label class="settings-style-field">
+          <span>Font Weight</span>
+          <select id="settings-text-weight" onchange="updateChatTextStyle('weight', this.value)">
+            <option value="400">Regular</option>
+            <option value="500">Medium</option>
+            <option value="600">Semibold</option>
+            <option value="700">Bold</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="chat-settings-section">
+      <div class="chat-settings-head">
+        <h4>PNG Stickers</h4>
+        <label class="settings-inline-btn upload-btn">
+          Upload PNG
+          <input id="sticker-input" type="file" accept="image/png" style="display:none" onchange="uploadSticker(this)">
+        </label>
+      </div>
+      <p class="settings-help">Transparent PNG stickers stay on this device and can be sent as one-tap chat items during playback.</p>
+      <div class="settings-sticker-list" id="settings-sticker-list"></div>
+    </div>
   </div>
 </div>
 

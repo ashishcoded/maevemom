@@ -33,6 +33,20 @@ function reactionEmoji(emoji, cls = '') {
   return `<img class="${klass}" src="${IOS_EMOJI_BASE}${emojiCode(emoji)}.png" alt="${emoji}" draggable="false">`;
 }
 
+const DEFAULT_EMOJIS = ['❤️','😂','😍','😮','🔥','👏','🍿','💕','😭','✨','🎬'];
+const DEFAULT_TEMPLATES = ['Playing smoothly?','Wow','Are you here?','Any issue?'];
+const STORAGE_KEYS = {
+  templates: 'mm_tpl',
+  emojis: 'mm_enabled_emojis',
+  customEmojis: 'mm_custom_emojis',
+  stickers: 'mm_stickers',
+  chatTextStyle: 'mm_chat_text_style',
+};
+const STICKER_LIMIT = 10;
+const STICKER_MAX_BYTES = 256 * 1024;
+const STICKER_DATA_PREFIX = 'data:image/png;base64,';
+const DHURANDHAR_LOGO_SRC = '/images/dhurandhar-the-revenge.png';
+
 // ── State ─────────────────────────────────────────────────────────────────────
 const S = {
   token:   localStorage.getItem('mm_tok') || null,
@@ -47,6 +61,16 @@ const S = {
   pendingClr: null,
   pendingAvFile: null,
   sidebarOpen: true,
+  chatVisible: true,         // chat panel visible state
+  chatUnread: 0,             // unread messages while chat hidden
+  templates: JSON.parse(localStorage.getItem(STORAGE_KEYS.templates)||'[]'),
+  enabledEmojis: JSON.parse(localStorage.getItem(STORAGE_KEYS.emojis)||'null'),
+  customEmojis: JSON.parse(localStorage.getItem(STORAGE_KEYS.customEmojis)||'[]'),
+  stickers: JSON.parse(localStorage.getItem(STORAGE_KEYS.stickers)||'[]'),
+  chatTextStyle: JSON.parse(localStorage.getItem(STORAGE_KEYS.chatTextStyle)||'null'),
+  overlayChatHidden: false,
+  playerUiVisible: true,
+  playerUiTimer: null,
   libraryRenameTarget: null,
   // Owner clock for iframe sync
   _clock:  { playing:false, time:0, ts:Date.now() },
@@ -57,6 +81,9 @@ const S = {
   _frameBindTimer: null,
   _guestFrameClock: { playing:false, time:0, ts:Date.now() },
   _lastIframeState: null,
+  _embedSyncPulseTimer: null,
+  _embedSyncPulseCount: 0,
+  _lastSyncState: { state:'offline', text:'Ready' },
   // WebRTC
   rtc: null,
 };
@@ -79,6 +106,76 @@ function makeRtcState() {
   };
 }
 S.rtc = makeRtcState();
+
+function normalizeTemplates(list) {
+  const source = Array.isArray(list) ? list : [];
+  const seen = new Set();
+  const cleaned = [];
+  source.forEach(item => {
+    const text = String(item || '').trim().replace(/\s+/g, ' ').slice(0, 500);
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    cleaned.push(text);
+  });
+  return cleaned.length ? cleaned : DEFAULT_TEMPLATES.slice();
+}
+
+function normalizeEmojiChar(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const chars = Array.from(text);
+  if (!chars.length || chars.length > 4) return '';
+  return chars.join('');
+}
+
+function normalizeCustomEmojis(list) {
+  const seen = new Set(DEFAULT_EMOJIS);
+  return (Array.isArray(list) ? list : [])
+    .map(normalizeEmojiChar)
+    .filter(emoji => emoji && !seen.has(emoji) && seen.add(emoji))
+    .slice(0, 20);
+}
+
+function getAllEmojis() {
+  return [...DEFAULT_EMOJIS, ...S.customEmojis];
+}
+
+function normalizeChatTextStyle(style) {
+  const raw = style && typeof style === 'object' ? style : {};
+  const size = Math.min(22, Math.max(12, Number(raw.size) || 14));
+  const color = /^#[0-9a-f]{6}$/i.test(String(raw.color || '')) ? String(raw.color) : '#f5f5f5';
+  const weight = ['400','500','600','700'].includes(String(raw.weight || '')) ? String(raw.weight) : '500';
+  return { size, color, weight };
+}
+
+function normalizeEnabledEmojis(list) {
+  const all = getAllEmojis();
+  const source = Array.isArray(list) ? list : all;
+  const next = all.filter(em => source.includes(em));
+  return next.length ? next : all.slice();
+}
+
+function normalizeSticker(src) {
+  if (!src || typeof src !== 'object') return null;
+  const id = String(src.id || `st_${Date.now()}`).slice(0, 40);
+  const name = String(src.name || 'Sticker').trim().slice(0, 40) || 'Sticker';
+  const dataUrl = String(src.dataUrl || '');
+  if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/i.test(dataUrl)) return null;
+  return { id, name, dataUrl };
+}
+
+function normalizeStickers(list) {
+  return (Array.isArray(list) ? list : [])
+    .map(normalizeSticker)
+    .filter(Boolean)
+    .slice(0, STICKER_LIMIT);
+}
+
+S.templates = normalizeTemplates(S.templates);
+S.customEmojis = normalizeCustomEmojis(S.customEmojis);
+S.enabledEmojis = normalizeEnabledEmojis(S.enabledEmojis);
+S.stickers = normalizeStickers(S.stickers);
+S.chatTextStyle = normalizeChatTextStyle(S.chatTextStyle);
 
 // ── API ───────────────────────────────────────────────────────────────────────
 async function api(method, path, body) {
@@ -212,6 +309,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   $('v-url').addEventListener('input', e => onVidUrl(e.target));
+  initChatEnhancements();
   initLobbyAudio();
   initHomeHeroScene();
 });
@@ -234,8 +332,10 @@ function drawNoise() {
 const EMOJIS = ['❤️','😂','😍','😮','🔥','👏','🍿','💕','😭','✨','🎬'];
 
 function buildEmojiStrips() {
-  buildStrip('emj-strip',  EMOJIS, em => sendEmoji(em));
-  buildStrip('fc-emj',     EMOJIS, em => sendEmoji(em));
+  buildStrip('emj-strip', S.enabledEmojis, em => sendEmoji(em));
+  buildStrip('fc-emj', S.enabledEmojis, em => sendEmoji(em));
+  buildStrip('chat-emoji-strip', S.enabledEmojis, em => sendEmoji(em));
+  buildStrip('fc-emoji-strip', S.enabledEmojis, em => sendEmoji(em));
 }
 function buildStrip(id, emojis, handler) {
   const el = $(id); if (!el) return;
@@ -248,6 +348,385 @@ function buildStrip(id, emojis, handler) {
     el.appendChild(btn);
   });
 }
+
+function initChatEnhancements() {
+  saveChatPrefs();
+  renderQuickActions();
+  renderSettingsPanels();
+  applyChatTextStyle();
+  syncFullscreenUi();
+  bindPlayerChrome();
+  document.addEventListener('mousemove', e => {
+    if (!isZoomed()) return;
+    const player = $('player');
+    if (player?.contains(e.target)) revealPlayerUi();
+  });
+  document.addEventListener('touchstart', () => {
+    if (isZoomed()) revealPlayerUi();
+  }, { passive:true });
+}
+
+function saveChatPrefs() {
+  localStorage.setItem(STORAGE_KEYS.templates, JSON.stringify(normalizeTemplates(S.templates)));
+  localStorage.setItem(STORAGE_KEYS.customEmojis, JSON.stringify(normalizeCustomEmojis(S.customEmojis)));
+  localStorage.setItem(STORAGE_KEYS.emojis, JSON.stringify(normalizeEnabledEmojis(S.enabledEmojis)));
+  localStorage.setItem(STORAGE_KEYS.stickers, JSON.stringify(normalizeStickers(S.stickers)));
+  localStorage.setItem(STORAGE_KEYS.chatTextStyle, JSON.stringify(normalizeChatTextStyle(S.chatTextStyle)));
+}
+
+function renderQuickActions() {
+  renderTemplateStrip('chat-template-strip', false);
+  renderTemplateStrip('fc-template-strip', true);
+  renderStickerStrip('chat-sticker-strip', false);
+  renderStickerStrip('fc-sticker-strip', true);
+  updateQuickRows();
+}
+
+function updateQuickRows() {
+  document.querySelectorAll('.sticker-row').forEach(row => {
+    const strip = row.querySelector('.sticker-strip');
+    row.classList.toggle('hidden', !strip || strip.classList.contains('hidden') || !strip.children.length);
+  });
+}
+
+window.scrollQuickRow = (id, direction) => {
+  const el = $(id);
+  if (!el) return;
+  el.scrollBy({ left: direction * Math.max(140, el.clientWidth * 0.72), behavior:'smooth' });
+};
+
+function renderTemplateStrip(id, compact) {
+  const el = $(id);
+  if (!el) return;
+  el.innerHTML = '';
+  S.templates.forEach(text => {
+    const btn = document.createElement('button');
+    btn.className = `quick-chip${compact ? ' compact' : ''}`;
+    btn.type = 'button';
+    btn.textContent = text;
+    btn.title = `Send: ${text}`;
+    btn.onclick = () => sendTemplate(text);
+    el.appendChild(btn);
+  });
+}
+
+function renderStickerStrip(id, compact) {
+  const el = $(id);
+  if (!el) return;
+  const stickers = normalizeStickers(S.stickers);
+  el.innerHTML = '';
+  el.classList.toggle('hidden', !stickers.length);
+  stickers.forEach(sticker => {
+    const btn = document.createElement('button');
+    btn.className = `sticker-chip${compact ? ' compact' : ''}`;
+    btn.type = 'button';
+    btn.title = sticker.name;
+    btn.innerHTML = `<img src="${sticker.dataUrl}" alt="${esc(sticker.name)}">`;
+    btn.onclick = () => sendSticker(sticker.id);
+    el.appendChild(btn);
+  });
+}
+
+function renderSettingsPanels() {
+  renderEmojiSettings();
+  renderTemplateSettings();
+  renderStickerSettings();
+  syncChatTextStyleInputs();
+}
+
+function applyChatTextStyle() {
+  const style = normalizeChatTextStyle(S.chatTextStyle);
+  S.chatTextStyle = style;
+  document.documentElement.style.setProperty('--chat-font-size', `${style.size}px`);
+  document.documentElement.style.setProperty('--chat-text-color', style.color);
+  document.documentElement.style.setProperty('--chat-font-weight', style.weight);
+}
+
+function syncChatTextStyleInputs() {
+  const style = normalizeChatTextStyle(S.chatTextStyle);
+  const size = $('settings-text-size');
+  const color = $('settings-text-color');
+  const weight = $('settings-text-weight');
+  const label = $('settings-text-size-val');
+  if (size) size.value = String(style.size);
+  if (color) color.value = style.color;
+  if (weight) weight.value = style.weight;
+  if (label) label.textContent = `${style.size}px`;
+}
+
+window.updateChatTextStyle = (field, value) => {
+  const next = { ...S.chatTextStyle, [field]: value };
+  S.chatTextStyle = normalizeChatTextStyle(next);
+  applyChatTextStyle();
+  syncChatTextStyleInputs();
+  saveChatPrefs();
+};
+
+function renderEmojiSettings() {
+  const grid = $('settings-emoji-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  getAllEmojis().forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.className = 'settings-emoji-btn';
+    btn.type = 'button';
+    btn.classList.toggle('active', S.enabledEmojis.includes(emoji));
+    btn.innerHTML = reactionEmoji(emoji, 'emoji-reaction-btn');
+    btn.onclick = () => toggleEnabledEmoji(emoji);
+    btn.oncontextmenu = e => {
+      if (!S.customEmojis.includes(emoji)) return;
+      e.preventDefault();
+      removeCustomEmoji(emoji);
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function renderTemplateSettings() {
+  const list = $('settings-template-list');
+  if (!list) return;
+  list.innerHTML = '';
+  S.templates.forEach((tpl, idx) => {
+    const row = document.createElement('div');
+    row.className = 'settings-text-row';
+    row.innerHTML = `
+      <input class="settings-text-input" value="${esc(tpl)}" maxlength="500" aria-label="Quick text ${idx + 1}">
+      <button class="settings-text-btn" type="button">Save</button>
+      <button class="settings-text-btn subtle" type="button">Send</button>
+      <button class="settings-text-btn danger" type="button">Remove</button>`;
+    const input = row.querySelector('input');
+    const buttons = row.querySelectorAll('button');
+    buttons[0].onclick = () => updateTemplate(idx, input.value);
+    buttons[1].onclick = () => sendTemplate(S.templates[idx] || input.value);
+    buttons[2].onclick = () => deleteTpl(idx);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        updateTemplate(idx, input.value);
+      }
+    });
+    list.appendChild(row);
+  });
+}
+
+function renderStickerSettings() {
+  const list = $('settings-sticker-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!S.stickers.length) {
+    list.innerHTML = '<p class="settings-empty">No stickers yet. Upload a transparent PNG to add one.</p>';
+    return;
+  }
+  S.stickers.forEach(sticker => {
+    const row = document.createElement('div');
+    row.className = 'settings-sticker-row';
+    row.innerHTML = `
+      <div class="settings-sticker-preview"><img src="${sticker.dataUrl}" alt="${esc(sticker.name)}"></div>
+      <div class="settings-sticker-meta"><strong>${esc(sticker.name)}</strong><span>PNG sticker</span></div>
+      <button class="settings-text-btn subtle" type="button">Send</button>
+      <button class="settings-text-btn danger" type="button">Remove</button>`;
+    const buttons = row.querySelectorAll('button');
+    buttons[0].onclick = () => sendSticker(sticker.id);
+    buttons[1].onclick = () => removeSticker(sticker.id);
+    list.appendChild(row);
+  });
+}
+
+function toggleEnabledEmoji(emoji) {
+  const next = S.enabledEmojis.includes(emoji)
+    ? S.enabledEmojis.filter(item => item !== emoji)
+    : [...S.enabledEmojis, emoji];
+  S.enabledEmojis = normalizeEnabledEmojis(next);
+  saveChatPrefs();
+  buildEmojiStrips();
+  renderEmojiSettings();
+}
+
+window.addCustomEmoji = () => {
+  const inp = $('settings-emoji-input');
+  if (!inp) return;
+  const emoji = normalizeEmojiChar(inp.value);
+  if (!emoji) return toast('Enter a single emoji');
+  if (getAllEmojis().includes(emoji)) return toast('Emoji already exists');
+  S.customEmojis = normalizeCustomEmojis([...S.customEmojis, emoji]);
+  S.enabledEmojis = normalizeEnabledEmojis([...S.enabledEmojis, emoji]);
+  inp.value = '';
+  saveChatPrefs();
+  buildEmojiStrips();
+  renderEmojiSettings();
+};
+
+function removeCustomEmoji(emoji) {
+  S.customEmojis = S.customEmojis.filter(item => item !== emoji);
+  S.enabledEmojis = normalizeEnabledEmojis(S.enabledEmojis.filter(item => item !== emoji));
+  saveChatPrefs();
+  buildEmojiStrips();
+  renderEmojiSettings();
+}
+
+window.resetEnabledEmojis = () => {
+  S.enabledEmojis = getAllEmojis();
+  saveChatPrefs();
+  buildEmojiStrips();
+  renderEmojiSettings();
+};
+
+window.resetTemplates = () => {
+  S.templates = DEFAULT_TEMPLATES.slice();
+  saveChatPrefs();
+  renderQuickActions();
+  renderTemplateSettings();
+};
+
+window.addTemplateFromSettings = () => {
+  const inp = $('settings-template-input');
+  if (!inp) return;
+  const text = String(inp.value || '').trim();
+  if (!text) return toast('Enter a quick text');
+  if (S.templates.includes(text)) return toast('Already saved');
+  S.templates = normalizeTemplates([...S.templates, text]);
+  inp.value = '';
+  saveChatPrefs();
+  renderQuickActions();
+  renderTemplateSettings();
+};
+
+function updateTemplate(idx, nextValue) {
+  const text = String(nextValue || '').trim().replace(/\s+/g, ' ');
+  if (!text) return toast('Quick text cannot be empty');
+  const next = S.templates.slice();
+  next[idx] = text;
+  S.templates = normalizeTemplates(next);
+  saveChatPrefs();
+  renderQuickActions();
+  renderTemplateSettings();
+}
+
+function sendTemplate(text) {
+  if (!text) return;
+  doSend({ value:text, style:{}, dataset:{ quick:'1' } });
+}
+
+window.openChatSettings = () => {
+  renderSettingsPanels();
+  $('m-chat-settings')?.classList.remove('hidden');
+  revealPlayerUi(true);
+};
+
+function sanitizeStickerData(dataUrl) {
+  return /^data:image\/png;base64,[A-Za-z0-9+/=]+$/i.test(dataUrl || '') ? dataUrl : '';
+}
+
+window.uploadSticker = input => {
+  const file = input?.files?.[0];
+  if (!file) return;
+  input.value = '';
+  if (file.type !== 'image/png') return toast('Only PNG stickers are supported');
+  if (file.size > STICKER_MAX_BYTES) return toast('Sticker must be under 256 KB');
+  if (S.stickers.length >= STICKER_LIMIT) return toast('Sticker limit reached');
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = sanitizeStickerData(reader.result);
+    if (!dataUrl) return toast('Could not read sticker');
+    S.stickers = normalizeStickers([...S.stickers, { id:`st_${Date.now()}`, name:file.name.replace(/\.png$/i,''), dataUrl }]);
+    saveChatPrefs();
+    renderQuickActions();
+    renderStickerSettings();
+    toast('Sticker added');
+  };
+  reader.readAsDataURL(file);
+};
+
+function removeSticker(id) {
+  S.stickers = S.stickers.filter(sticker => sticker.id !== id);
+  saveChatPrefs();
+  renderQuickActions();
+  renderStickerSettings();
+}
+
+function sendSticker(id) {
+  const sticker = S.stickers.find(item => item.id === id);
+  if (!sticker || !S.socket || !S.room) return;
+  const tmp = `tmp_${Date.now()}`;
+  S.msgIds.add(tmp);
+  const msg = { id:tmp, type:'sticker', stickerData:sticker.dataUrl, stickerName:sticker.name, user:S.user, userId:S.user?.id };
+  renderMsgDirect(S.user, msg, true, tmp);
+  S.socket.emit('chat_message', { roomId:S.room.id, type:'sticker', stickerData:sticker.dataUrl, stickerName:sticker.name });
+}
+
+function bindPlayerChrome() {
+  const player = $('player');
+  if (!player) return;
+  player.addEventListener('mouseenter', () => { if (isZoomed()) revealPlayerUi(); });
+  player.addEventListener('mouseleave', () => { if (isZoomed()) schedulePlayerUiHide(); });
+  player.addEventListener('mousemove', () => { if (isZoomed()) revealPlayerUi(); });
+}
+
+function isZoomed() {
+  return document.fullscreenElement === $('room-wrap');
+}
+
+function revealPlayerUi(persist = false) {
+  S.playerUiVisible = true;
+  syncFullscreenUi();
+  clearTimeout(S.playerUiTimer);
+  if (!persist) schedulePlayerUiHide();
+}
+
+function schedulePlayerUiHide() {
+  clearTimeout(S.playerUiTimer);
+  if (!isZoomed()) return;
+  S.playerUiTimer = setTimeout(() => {
+    if ($('m-chat-settings')?.classList.contains('hidden')) {
+      S.playerUiVisible = false;
+      syncFullscreenUi();
+    }
+  }, 2400);
+}
+
+function syncFullscreenUi() {
+  const roomWrap = $('room-wrap');
+  const player = $('player');
+  const chrome = $('player-chrome');
+  const zoomed = isZoomed();
+  roomWrap?.classList.toggle('is-fullscreen', zoomed);
+  player?.classList.toggle('is-fullscreen', zoomed);
+  chrome?.classList.toggle('visible', zoomed && S.playerUiVisible);
+  chrome?.setAttribute('aria-hidden', zoomed ? 'false' : 'true');
+  updatePlayerControls();
+  updateFloatChatVisibility();
+}
+
+function updatePlayerControls() {
+  const liveText = $('player-live-text');
+  if (liveText) {
+    const liveCount = [...new Set(S.room?.onlineUsers || [])].length;
+    liveText.textContent = liveCount === 1 ? '1 live' : `${liveCount} live`;
+  }
+  const panelBtn = $('player-panel-btn');
+  if (panelBtn) panelBtn.classList.toggle('active', S.sidebarOpen);
+  const chatBtnText = $('player-chat-btn-text');
+  if (chatBtnText) chatBtnText.textContent = S.overlayChatHidden ? 'Show Chat' : 'Hide Chat';
+}
+
+function updateFloatChatVisibility() {
+  const floatChat = $('float-chat');
+  const shouldShow = !!floatChat && !!S.room && S.chatVisible && !S.sidebarOpen && !S.overlayChatHidden;
+  floatChat?.classList.toggle('hidden', !shouldShow);
+  $('player')?.classList.toggle('overlay-chat-active', shouldShow);
+}
+
+window.toggleOverlayChat = () => {
+  if (S.sidebarOpen && !S.overlayChatHidden) {
+    S.overlayChatHidden = true;
+    setSidebar(false);
+  } else {
+    S.overlayChatHidden = !S.overlayChatHidden;
+  }
+  updatePlayerControls();
+  updateFloatChatVisibility();
+  revealPlayerUi();
+};
 
 // ── Session ───────────────────────────────────────────────────────────────────
 function persist(u, tok) { S.user=u; S.token=tok; localStorage.setItem('mm_tok',tok); localStorage.setItem('mm_usr',JSON.stringify(u)); }
@@ -357,6 +836,7 @@ function resetPlayerUI() {
   if($('r-sub')) $('r-sub').textContent='';
   if($('clear-content-btn')) $('clear-content-btn').classList.add('hidden');
   setSyncStatus(S.isOwner?'hosting':'synced', S.isOwner?'Ready to load':'Waiting for content');
+  updateFloatChatVisibility();
 
   handleLobbyMusic(true);
 }
@@ -425,9 +905,12 @@ window.openCreateModal  = () => { $('c-name').value='';$('c-pw').value='';$('c-e
 window.openJoinModal    = () => { $('j-err').textContent='';$('j-pw-w').classList.add('hidden');$('m-join').classList.remove('hidden');setTimeout(()=>{if(!$('j-id').value)$('j-id').focus();},50); };
 window.openVideoModal   = () => { $('v-url').value='';$('v-err').textContent='';$('sel-prev').classList.add('hidden');$('v-load-btn').disabled=true;S.vid={url:null,title:'',meta:'',type:'embed'};$('m-video').classList.remove('hidden'); };
 window.openLibraryModal = () => { $('m-library').classList.remove('hidden'); loadLibrary(true); };
-window.openInvitePanel  = () => sbTab('room');
+window.openInvitePanel  = () => { setSidebar(true); sbTab('room'); revealPlayerUi(true); };
 window.openProfileModal = () => { if(!S.user)return;$('pf-nm').value=S.user.displayName||'';$('pf-bio').value=S.user.bio||'';$('pf-pw').value='';$('pf-err').textContent='';S.pendingClr=null;S.pendingAvFile=null;renderProfAv($('prof-av'),S.user);$('m-prof').classList.remove('hidden'); };
-window.closeModal = id => $(id).classList.add('hidden');
+window.closeModal = id => {
+  $(id).classList.add('hidden');
+  if (id === 'm-chat-settings') schedulePlayerUiHide();
+};
 
 // ── Create/Join ───────────────────────────────────────────────────────────────
 window.doCreate = async () => {
@@ -452,6 +935,10 @@ window.doJoin = async () => {
 function enterRoom(room, password) {
   S.room=room; S.isOwner=room.isOwner; S.msgIds.clear();
   S.sidebarOpen=true;
+  S.chatVisible=true;
+  S.chatUnread=0;
+  S.overlayChatHidden=false;
+  S.playerUiVisible=true;
   saveRoomSession(room, password);
   resetPlayerUI();
   setPlayerConnecting(true, 'Connecting room…', 'Joining and restoring sync');
@@ -463,7 +950,10 @@ function enterRoom(room, password) {
   $('fc-msgs').innerHTML='';
   $('media-list').innerHTML='<div class="media-mt"><div style="font-size:2rem;opacity:.2">📁</div><p>No uploads yet</p></div>';
   setSidebar(true); sbTab('chat');
-  buildEmojiStrips(); // rebuild after DOM is ready
+  buildEmojiStrips();
+  renderQuickActions();
+  renderSettingsPanels();
+  syncFullscreenUi();
   connectSocket(room, password);
 }
 
@@ -506,6 +996,17 @@ function connectSocket(room, password) {
   S.socket.on('user_joined', ({user})=>{sysMsg(`${user.displayName} joined ✨`);toast(`${user.displayName} is here!`);if(S.isOwner)sendHeartbeat();});
   S.socket.on('user_left',   ({user})=>{
     sysMsg(`${user.displayName} left`);
+    // Immediately update presence without waiting for room_update
+    if (S.room) {
+      S.room.onlineUsers = (S.room.onlineUsers || []).filter(id => id !== user.id);
+      // Update viewer bar dots instantly
+      if (S.room.owner?.id === user.id) {
+        $('vwh-s').className = 'vw-s offline';
+      } else if (S.room.guest?.id === user.id) {
+        $('vwg-s').className = 'vw-s offline';
+      }
+      $('op-n').textContent = [...new Set(S.room.onlineUsers)].length;
+    }
     if (S.rtc.inCall || S.rtc.state === 'calling' || S.rtc.state === 'connecting') {
       stopCallLocally({ reason:'Partner left the room', notify:false, silent:true });
     }
@@ -576,7 +1077,7 @@ function updateRoomUI(room) {
   if(guest){ renderVwAv($('vwg-av'),guest); $('vwg-nm').textContent=guest.displayName; $('vwg-s').className='vw-s '+(room.onlineUsers?.includes(guest.id)?'online':'offline'); }
   else { $('vwg-av').textContent='?';$('vwg-av').style.background='#333';$('vwg-nm').textContent='Waiting…';$('vwg-s').className='vw-s offline'; }
 
-  $('ss-right').textContent = S.isOwner?'You control playback':(owner?`${owner.displayName} controls`:'');
+  updateSyncMeta();
 
   $('ri-name').textContent=room.name;$('ri-id').textContent=room.id;
   $('ri-priv').textContent=room.isPrivate?'Yes 🔒':'No';
@@ -596,6 +1097,8 @@ function updateRoomUI(room) {
   renderMediaList(room.uploadedVideos || []);
   if(room.video&&room.video.url!==S.vid.url) loadVidUrl(room.video.url,room.video.title,room.video.meta,room.video.type);
   if(!room.video && S.vid.url) resetPlayerUI();
+  updatePlayerControls();
+  updateFloatChatVisibility();
 }
 
 function renderVwAv(el,u){el.style.background=u.avatarColor;el.innerHTML=u.avatarUrl?`<img src="${u.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:u.avatar;}
@@ -620,12 +1123,20 @@ window.toggleSidebar = () => setSidebar(!S.sidebarOpen);
 function setSidebar(open) {
   S.sidebarOpen=open;
   $('sidebar').classList.toggle('collapsed',!open);
-  $('float-chat').classList.toggle('hidden',open);
   $('sb-toggle-btn').classList.toggle('sb-hidden-mode',!open);
+  if (open) {
+    S.chatUnread = 0;
+    updateChatUnreadBadge();
+  }
+  updatePlayerControls();
+  updateFloatChatVisibility();
 }
 
 window.leaveRoom = () => {
   endCall(); stopAllTimers();
+  if (document.fullscreenElement === $('room-wrap')) {
+    (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen)?.call(document);
+  }
   clearRoomSession();
   if(S.socket&&S.room){try{S.socket.emit('leave_room',{roomId:S.room.id});}catch{}}
   if(S.socket){setTimeout(()=>{if(S.socket){S.socket.disconnect();S.socket=null;}},60);}
@@ -743,6 +1254,127 @@ function guestFrameNow(){
   if(!c.playing) return c.time;
   return c.time+(Date.now()-c.ts)/1000;
 }
+function isGenericEmbed(url=S.vid?.url,type=S.vid?.type){
+  return (type||S.vid?.type)==='embed' && embedProvider(url||S.vid?.url||'')==='generic';
+}
+function clearEmbedSyncPulse(){
+  if(S._embedSyncPulseTimer){
+    clearTimeout(S._embedSyncPulseTimer);
+    S._embedSyncPulseTimer=null;
+  }
+  S._embedSyncPulseCount=0;
+}
+function updateSyncMeta(){
+  const right=$('ss-right');
+  if(!right) return;
+  right.textContent='';
+  right.classList.toggle('has-controls',Boolean(S.isOwner&&isGenericEmbed()));
+
+  const owner=S.room?.owner;
+  const parts=[
+    S.isOwner ? 'You control playback' : (owner ? `${owner.displayName} controls` : '')
+  ].filter(Boolean);
+  if(isGenericEmbed()) parts.push('Site-limited sync');
+
+  const meta=document.createElement('span');
+  meta.className='ss-meta';
+  meta.textContent=parts.join(' • ');
+  right.appendChild(meta);
+
+  if(S.isOwner&&isGenericEmbed()){
+    const controls=document.createElement('div');
+    controls.className='sync-mini-controls';
+    [
+      ['-10','Back 10s','back'],
+      ['Play','Send play','play'],
+      ['Pause','Send pause','pause'],
+      ['+10','Forward 10s','forward'],
+      ['Sync','Resync viewers','sync'],
+    ].forEach(([label,title,action])=>{
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='sync-mini-btn';
+      btn.title=title;
+      btn.textContent=label;
+      btn.addEventListener('click',()=>window.genericSyncControl(action));
+      controls.appendChild(btn);
+    });
+    right.appendChild(controls);
+  }
+}
+function setSyncFeedback(state,text){
+  S._lastSyncState={state,text};
+  const dot=$('ss-dot');
+  if(dot) dot.className='ss-dot '+(state==='hosting'?'hosting':state==='synced'?'synced':'offline');
+  const label=$('ss-txt');
+  if(label) label.textContent=text;
+  updateSyncMeta();
+}
+window.genericSyncControl = action => {
+  if(!S.isOwner||!isGenericEmbed()) return;
+  let playing=Boolean(S._clock.playing);
+  let time=Math.max(0,clockNow());
+  let isSeeked=false;
+
+  if(action==='back'){
+    time=Math.max(0,time-10);
+    isSeeked=true;
+  }else if(action==='forward'){
+    time=time+10;
+    isSeeked=true;
+  }else if(action==='play'){
+    playing=true;
+  }else if(action==='pause'){
+    playing=false;
+  }
+
+  clockTick(playing,time);
+  guestFrameTick(playing,time);
+  postGenericSync(playing,time,isSeeked||action==='sync');
+  pulseGenericSync(playing,time,isSeeked||action==='sync');
+  sendOwnerSync(playing,time,isSeeked);
+  setSyncFeedback('hosting',isGenericEmbed()?'Host sync sent to viewers':'You control playback');
+};
+function postGenericSync(playing,time,shouldSeek){
+  const commands=[
+    {action:playing?'play':'pause',time},
+    {method:playing?'play':'pause'},
+    {event:playing?'play':'pause',time},
+    {command:playing?'play':'pause',time},
+    {type:playing?'play':'pause',time},
+  ];
+  if(shouldSeek){
+    commands.push(
+      {action:'seek',time},
+      {method:'setCurrentTime',value:time},
+      {event:'seek',time},
+      {command:'seek',time},
+      {type:'seek',time},
+      {seekTo:time},
+      {currentTime:time},
+    );
+  }
+  commands.push({maevemomSync:{playing,time,shouldSeek}});
+  commands.forEach(payload=>{
+    framePost(payload);
+    if(typeof payload!=='string') framePost(JSON.stringify(payload));
+  });
+}
+function pulseGenericSync(playing,time,isSeeked=false){
+  clearEmbedSyncPulse();
+  const run=()=>{
+    const fr=$('vframe');
+    if(!fr||fr.style.display==='none'||!isGenericEmbed(fr.src,'embed')) return;
+    const shouldSeek=isSeeked||S._embedSyncPulseCount===0;
+    postGenericSync(playing,time,shouldSeek);
+    if(++S._embedSyncPulseCount<6){
+      S._embedSyncPulseTimer=setTimeout(run,S._embedSyncPulseCount<3?240:560);
+    }else{
+      clearEmbedSyncPulse();
+    }
+  };
+  run();
+}
 
 window.onVidUrl = el => {
   const r=resolveUrl(el.value.trim());
@@ -781,6 +1413,7 @@ window.doLoadVid = () => {
 function loadVidUrl(url,title,meta,type) {
 
   handleLobbyMusic(false);
+  clearEmbedSyncPulse();
 
   const safeUrl=type==='embed'?normalizeEmbedUrl(url):url;
   S.vid={url:safeUrl,title:title||'Video',meta:meta||'',type:type||'embed'};
@@ -811,7 +1444,10 @@ function loadVidUrl(url,title,meta,type) {
   } else {
     fr.onload=()=>{
       scheduleFrameBinding();
-      if(!S.isOwner&&S.socket&&S.room) S.socket.emit('request_sync',{roomId:S.room.id});
+      if(!S.isOwner&&S.socket&&S.room){
+        S.socket.emit('request_sync',{roomId:S.room.id});
+        if(isGenericEmbed(fr.src,'embed')) pulseGenericSync(S._guestFrameClock.playing,S._guestFrameClock.time,true);
+      }
     };
     fr.src=safeUrl;fr.style.display='block';pempty.style.display='none';
     clockTick(false,0);
@@ -819,9 +1455,9 @@ function loadVidUrl(url,title,meta,type) {
   }
 
   const limited=type==='embed'&&embedProvider(safeUrl)==='generic';
-  setSyncStatus(
+  setSyncFeedback(
     S.isOwner?'hosting':(limited?'offline':'synced'),
-    S.isOwner?(limited?'Controls are limited on this site':'You control playback'):(limited?'This site limits real-time sync':'Waiting for sync')
+    S.isOwner?(limited?'Hosting with limited site sync':'You control playback'):(limited?'Waiting for host sync on this site':'Waiting for sync')
   );
   startSyncTimers();
 }
@@ -857,7 +1493,7 @@ function startSyncTimers() {
   stopAllTimers();
   if(S.isOwner) {
     S._heartbeatTimer=setInterval(()=>{if(S.socket&&S.room)sendHeartbeat();},1200);
-    setSyncStatus('hosting','You control playback');
+    setSyncFeedback('hosting',isGenericEmbed()?'Hosting with limited site sync':'You control playback');
   } else {
     S._guestTimer=setInterval(()=>{if(S.socket&&S.room)S.socket.emit('request_sync',{roomId:S.room.id});},5000);
   }
@@ -866,6 +1502,7 @@ function stopAllTimers() {
   if(S._heartbeatTimer){clearInterval(S._heartbeatTimer);S._heartbeatTimer=null;}
   if(S._guestTimer){clearInterval(S._guestTimer);S._guestTimer=null;}
   if(S._frameBindTimer){clearTimeout(S._frameBindTimer);S._frameBindTimer=null;}
+  clearEmbedSyncPulse();
 }
 
 // Apply sync to guest's player — BUG FIX #3
@@ -895,8 +1532,8 @@ function applySync(playing,time,isSeeked) {
       if(shouldSeek) fr.contentWindow.postMessage(JSON.stringify({method:'setCurrentTime',value:time}),'*');
       fr.contentWindow.postMessage(JSON.stringify({method:playing?'play':'pause'}),'*');
     }else{
-      fr.contentWindow.postMessage({action:playing?'play':'pause',time},'*');
-      if(shouldSeek) fr.contentWindow.postMessage({action:'seek',time},'*');
+      postGenericSync(playing,time,shouldSeek);
+      pulseGenericSync(playing,time,isSeeked||shouldSeek);
     }
   } catch {}
   guestFrameTick(playing,time);
@@ -938,19 +1575,22 @@ window.addEventListener('message',e=>{
 });
 
 function setSyncStatus(state,text) {
-  const dot=$('ss-dot'); if(dot) dot.className='ss-dot '+(state==='hosting'?'hosting':state==='synced'?'synced':'offline');
-  const t=$('ss-txt');   if(t)   t.textContent=text;
+  setSyncFeedback(state,text);
 }
 
 // ── CHAT ──────────────────────────────────────────────────────────────────────
 window.sendChat = () => doSend($('chat-inp'));
 window.fcSend   = () => doSend($('fc-inp'));
 function doSend(inp) {
-  const txt=inp.value.trim(); if(!txt||!S.socket||!S.room) return;
-  inp.value=''; inp.style.height='';
-  const tmp='tmp_'+Date.now(); S.msgIds.add(tmp);
-  renderMsgDirect(S.user,txt,true,tmp);
-  S.socket.emit('chat_message',{roomId:S.room.id,text:txt});
+  const txt = String(inp?.value || '').trim();
+  if (!txt || !S.socket || !S.room) return;
+  if (inp?.value !== undefined) inp.value = '';
+  if (inp?.style) inp.style.height = '';
+  const tmp = 'tmp_' + Date.now();
+  S.msgIds.add(tmp);
+  const payload = { id:tmp, type:'text', text:txt, user:S.user, userId:S.user?.id };
+  renderMsgDirect(S.user, payload, true, tmp);
+  S.socket.emit('chat_message', { roomId:S.room.id, text:txt, type:'text' });
   stopTyping();
 }
 window.chatKeyH=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}};
@@ -969,24 +1609,60 @@ function renderMsg(msg,fromHistory=false){
   if(S.msgIds.has(msg.id))return; S.msgIds.add(msg.id);
   if(msg.type==='system'){sysMsg(msg.text);return;}
   if(msg.userId===S.user?.id)return;
-  renderMsgDirect(msg.user,msg.text,false,msg.id);
+  renderMsgDirect(msg.user,msg,false,msg.id);
   if(!fromHistory)scrollChat();
 }
-function renderMsgDirect(user,text,isMine,id){
-  const et=esc(text);
+function renderRichSegments(text) {
+  const urlRegex = /(https?:\/\/[^\s]+)/gi;
+  const keywordRegex = /dhurandhar/gi;
+  return String(text || '')
+    .split(urlRegex)
+    .filter(part => part !== '')
+    .map(part => {
+      if (/^https?:\/\/[^\s]+$/i.test(part)) return esc(part);
+      let html = '';
+      let last = 0;
+      part.replace(keywordRegex, (match, offset) => {
+        html += esc(part.slice(last, offset));
+        html += `<img class="dhurandhar-logo" src="${DHURANDHAR_LOGO_SRC}" alt="Dhurandhar The Revenge">`;
+        last = offset + match.length;
+        return match;
+      });
+      html += esc(part.slice(last));
+      return html;
+    })
+    .join('');
+}
+function getMessageMarkup(msg, floatMode = false) {
+  if (msg?.type === 'sticker') {
+    const stickerData = sanitizeStickerData(msg.stickerData);
+    if (!stickerData) return '<div class="msg-b">Sticker unavailable</div>';
+    const cls = floatMode ? 'float-sticker' : 'chat-sticker';
+    return `<div class="${cls}"><img src="${stickerData}" alt="${esc(msg.stickerName || 'Sticker')}"></div>`;
+  }
+  const rich = renderRichSegments(msg?.text || '');
+  return `<div class="${floatMode ? 'mb' : 'msg-b'}"><span class="chat-rich">${rich}</span></div>`;
+}
+function renderMsgDirect(user,msg,isMine,id){
+  const name = esc(isMine ? (S.user?.displayName || user?.displayName || 'You') : (user?.displayName || 'Guest'));
   // Sidebar
   const box=$('chat-box'); box.querySelector('.chat-mt')?.remove();
   const d=document.createElement('div'); d.className='msg-w '+(isMine?'mine':'theirs');
-  d.innerHTML=(isMine?'':`<div class="msg-s">${esc(user?.displayName||'')}</div>`)+`<div class="msg-b">${et}</div>`;
+  d.innerHTML=`<div class="msg-s msg-name">${name}</div>`+getMessageMarkup(msg,false);
   twEl(d); box.appendChild(d);
   // Float
   const fc=$('fc-msgs');
   const fd=document.createElement('div'); fd.className='fc-msg '+(isMine?'mine':'theirs');
-  fd.innerHTML=(isMine?'':`<div class="ms">${esc(user?.displayName||'')}</div>`)+`<div class="mb">${et}</div>`;
+  fd.innerHTML=`<div class="ms fc-name">${name}</div>`+getMessageMarkup(msg,true);
   twEl(fd); fc.appendChild(fd);
-  while(fc.children.length>25) fc.removeChild(fc.firstChild);
+  while(fc.children.length>4) fc.removeChild(fc.firstChild);
   fc.scrollTop=fc.scrollHeight;
   scrollChat();
+  // Unread badge: increment when chat is hidden or sidebar is collapsed
+  if (!isMine && (!S.chatVisible || !S.sidebarOpen)) {
+    S.chatUnread++;
+    updateChatUnreadBadge();
+  }
 }
 function sysMsg(text){
   [$('chat-box'),$('fc-msgs')].forEach(box=>{
@@ -1000,17 +1676,29 @@ function scrollChat(){const b=$('chat-box');if(b)b.scrollTop=b.scrollHeight;}
 
 // ── EMOJI ─────────────────────────────────────────────────────────────────────
 window.sendEmoji=emoji=>{if(!S.socket||!S.room)return;S.socket.emit('emoji_reaction',{roomId:S.room.id,emoji});spawnEmoji(emoji);};
+function getEmojiFloatRoot() {
+  if (document.fullscreenElement === $('room-wrap')) return $('room-efloat') || $('efloat');
+  return $('room-efloat') || $('efloat');
+}
 function spawnEmoji(emoji){
   const el=document.createElement('div');el.className='float-emj';
   const dur=2.6+Math.random()*0.8;
   el.innerHTML=`<div class="float-emj-core">${reactionEmoji(emoji, 'emoji-reaction-float')}</div>`;
-  el.style.left=(10+Math.random()*74)+'vw';
-  el.style.bottom=(Math.random()*28+42)+'px';
+  const root = getEmojiFloatRoot();
+  if (!root) return;
+  const useRoomCoords = root.id === 'room-efloat';
+  if (useRoomCoords) {
+    el.style.left = (8 + Math.random() * 78) + '%';
+    el.style.bottom = (Math.random() * 24 + 56) + 'px';
+  } else {
+    el.style.left = (10 + Math.random() * 74) + 'vw';
+    el.style.bottom = (Math.random() * 28 + 42) + 'px';
+  }
   el.style.setProperty('--fe-drift',`${(Math.random()*120-60).toFixed(0)}px`);
   el.style.setProperty('--fe-spin',`${(Math.random()*28-14).toFixed(0)}deg`);
   el.style.setProperty('--fe-scale',`${(1.08+Math.random()*0.42).toFixed(2)}`);
   el.style.setProperty('--fe-dur',`${dur.toFixed(2)}s`);
-  $('efloat').appendChild(el);setTimeout(()=>el.remove(),dur*1000+180);
+  root.appendChild(el);setTimeout(()=>el.remove(),dur*1000+180);
 }
 
 // ── MEDIA UPLOAD ──────────────────────────────────────────────────────────────
@@ -1293,18 +1981,17 @@ async function startCall(){
     await ensureRtcStream();
     setupPc('caller');
     attachLocalTracks();
-    setCallUI(true);
-    setRtcState('calling','Callingâ€¦');
     S.rtc.inCall=true;
     S.rtc.makingOffer = true;
     const offer=await S.rtc.pc.createOffer({offerToReceiveAudio:true});
     await S.rtc.pc.setLocalDescription(offer);
     S.socket.emit('rtc_offer',{roomId:S.room.id,offer});
-    S.rtc.inCall=true;
-    setCallUI(true);setRtcState('calling','Calling…');
-    // BUG FIX #7: timeout if no answer
-    S.rtc._connectTimer=setTimeout(()=>{if(S.rtc.state!=='connected'){toast('No answer — call ended');endCall();}},20000);
-  }catch(ex){toast('Mic error: '+ex.message);endCall();}
+    setCallUI(true);
+    setRtcState('calling','Calling…');
+    // timeout if no answer in 20s
+    clearTimeout(S.rtc._connectTimer);
+    S.rtc._connectTimer=setTimeout(()=>{if(S.rtc.state!=='connected'){toast('No answer — call ended');stopCallLocally({notify:true,silent:true});}},20000);
+  }catch(ex){toast('Mic error: '+ex.message);stopCallLocally({notify:false,silent:true});}
 }
 
 function setupPc(role){
@@ -1548,8 +2235,143 @@ function endCall(){
 }
 window.endCall=endCall;
 
+// ── CHAT VISIBILITY TOGGLE (feature #4) ───────────────────────────────────────
+function updateChatUnreadBadge() {
+  const n = S.chatUnread;
+  ['chat-unread-badge','legacy-chat-unread-badge'].forEach(id => {
+    const badge = $(id);
+    if (!badge) return;
+    badge.textContent = n > 9 ? '9+' : n;
+    badge.classList.toggle('hidden', n === 0);
+  });
+}
+
+window.toggleChatVisibility = () => {
+  S.chatVisible = !S.chatVisible;
+  const inner = $('chat-inner');
+  const icons = ['chat-vis-icon','legacy-chat-vis-icon'];
+  if (inner) inner.classList.toggle('hidden', !S.chatVisible);
+  icons.forEach(id => {
+    const icon = $(id);
+    if (!icon) return;
+    icon.innerHTML = S.chatVisible
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+  });
+  // If showing chat, clear unread
+  if (S.chatVisible) {
+    S.chatUnread = 0;
+    updateChatUnreadBadge();
+  }
+};
+
+// ── CHAT TEMPLATES (feature #6) ───────────────────────────────────────────────
+function saveTemplates() {
+  saveChatPrefs();
+}
+
+window.toggleTemplatePanel = () => {
+  openChatSettings();
+};
+
+function renderTemplatePanel() {
+  const list = $('template-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!S.templates.length) {
+    list.innerHTML = '<p class="tpl-empty">No templates yet. Add one below.</p>';
+    return;
+  }
+  S.templates.forEach((tpl, idx) => {
+    const row = document.createElement('div');
+    row.className = 'tpl-row';
+    row.innerHTML = `
+      <span class="tpl-text" title="${esc(tpl)}">${esc(tpl)}</span>
+      <div class="tpl-btns">
+        <button class="tpl-use" onclick="useTpl(${idx})" title="Use">▶</button>
+        <button class="tpl-del" onclick="deleteTpl(${idx})" title="Delete">✕</button>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+window.addTemplate = () => {
+  const inp = $('tpl-input');
+  if (!inp) return;
+  const text = inp.value.trim();
+  if (!text) { toast('Enter a template message'); return; }
+  if (S.templates.includes(text)) { toast('Already saved'); return; }
+  S.templates.push(text);
+  saveTemplates();
+  inp.value = '';
+  renderTemplatePanel();
+  toast('Template saved!');
+};
+
+window.useTpl = idx => {
+  const tpl = S.templates[idx];
+  if (!tpl) return;
+  const inp = $('chat-inp') || $('fc-inp');
+  if (!inp) return;
+  inp.value = tpl;
+  inp.focus();
+  inp.style.height = '';
+  inp.style.height = Math.min(inp.scrollHeight, 110) + 'px';
+  $('template-panel')?.classList.add('hidden');
+};
+
+window.deleteTpl = idx => {
+  S.templates.splice(idx, 1);
+  saveTemplates();
+  renderTemplatePanel();
+};
+
+// ── FULLSCREEN (feature #5) ────────────────────────────────────────────────────
+window.toggleFullscreen = () => {
+  const target = $('room-wrap') || document.documentElement;
+  if (!document.fullscreenElement) {
+    (target.requestFullscreen || target.webkitRequestFullscreen || target.mozRequestFullScreen)?.call(target);
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen)?.call(document);
+  }
+};
+
+document.addEventListener('fullscreenchange', () => {
+  const btn = $('fs-btn');
+  const isFs = !!document.fullscreenElement;
+  if (btn) {
+    btn.title = isFs ? 'Exit Fullscreen' : 'Fullscreen';
+    btn.innerHTML = isFs
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M8 3v3a2 2 0 01-2 2H3m18 0h-3a2 2 0 01-2-2V3m0 18v-3a2 2 0 012-2h3M3 16h3a2 2 0 012 2v3"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>`;
+  }
+  S.playerUiVisible = true;
+  syncFullscreenUi();
+  if (isFs) schedulePlayerUiHide();
+});
+
 // ── Utils ─────────────────────────────────────────────────────────────────────
-function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function renderTemplatePanel() {
+  renderTemplateSettings();
+}
+
+window.addTemplate = () => {
+  addTemplateFromSettings();
+};
+
+window.useTpl = idx => {
+  const tpl = S.templates[idx];
+  if (tpl) sendTemplate(tpl);
+};
+
+window.deleteTpl = idx => {
+  S.templates.splice(idx, 1);
+  saveTemplates();
+  renderQuickActions();
+  renderTemplateSettings();
+};
+
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 let _tt;
 function toast(msg){const el=$('toast');el.textContent=msg;el.classList.remove('hidden');el.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),2900);}
 window.toast=toast;

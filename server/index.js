@@ -536,7 +536,9 @@ io.on('connection', socket => {
     socket.leave(roomId);
     sessions.delete(socket.id);
     socket.to(roomId).emit('user_left',{user:uPub(user)});
+    // Immediately broadcast updated room state so partner sees correct count
     bcastRoom(room);
+    promoteOwner(room);
   });
 
   // ── set_video: BUG FIX #1 ─────────────────────────────────────────────────
@@ -569,11 +571,34 @@ io.on('connection', socket => {
   });
 
   // ── chat ──────────────────────────────────────────────────────────────────
-  socket.on('chat_message',({roomId,text})=>{
+  socket.on('chat_message',payload=>{
+    const { roomId, text, type, stickerData, stickerName } = payload || {};
     const room=rooms.get(roomId);
-    if(!room||!text?.trim()) return;
-    const msg={id:uuidv4().slice(0,12),userId,user:uPub(user),
-      text:text.trim().slice(0,500),type:'text',at:Date.now()};
+    if(!room) return;
+    let msg;
+    if (type === 'sticker') {
+      const data = String(stickerData || '');
+      if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/i.test(data)) return;
+      msg = {
+        id:uuidv4().slice(0,12),
+        userId,
+        user:uPub(user),
+        type:'sticker',
+        stickerData:data.slice(0, 400000),
+        stickerName:String(stickerName || 'Sticker').trim().slice(0, 40) || 'Sticker',
+        at:Date.now()
+      };
+    } else {
+      if(!text?.trim()) return;
+      msg = {
+        id:uuidv4().slice(0,12),
+        userId,
+        user:uPub(user),
+        text:text.trim().slice(0,500),
+        type:'text',
+        at:Date.now()
+      };
+    }
     room.messages.push(msg);
     if(room.messages.length>300) room.messages.shift();
     io.to(roomId).emit('chat_message',msg);
@@ -607,7 +632,9 @@ io.on('connection', socket => {
         if(!hasOtherSocket){
           releaseRoomSeat(room, userId, { intendedLeave:false, socketId:socket.id });
           io.to(sess.roomId).emit('user_left',{user:uPub(user)});
+          promoteOwner(room);
         }
+        // Always broadcast immediately so partner count updates instantly
         bcastRoom(room);
       }
       sessions.delete(socket.id);
