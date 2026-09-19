@@ -235,6 +235,14 @@ function refreshRoomsForUser(userId) {
     }
   }
 }
+function activeRoomMediaForUser(userId) {
+  for (const room of rooms.values()) {
+    const isMember = room.ownerId === userId || room.guestId === userId;
+    const isConnected = [...sessions.values()].some(session => session.userId === userId && session.roomId === room.id);
+    if (isMember && isConnected) return combinedRoomMedia(room);
+  }
+  return null;
+}
 loadLibraries();
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -431,16 +439,17 @@ app.post('/api/library/upload', authMw, uploadVideo.single('video'), (req,res) =
     entry.url = '/api/media/' + entry.id + '/stream';
     library.push(entry);
     saveLibraries();
-    const compatibility = !NATIVE_VIDEO_EXTENSIONS.has(path.extname(entry.filename).toLowerCase())
-      ? startCompatibleTranscode(entry)
-      : { status:'not-needed' };
     refreshRoomsForUser(userId);
+    const roomItems = activeRoomMediaForUser(userId);
+    const needsCompatibility = !NATIVE_VIDEO_EXTENSIONS.has(path.extname(entry.filename).toLowerCase());
     res.json({
       video: pubMediaItem(entry),
       items: library.slice().sort((a,b)=>a.order-b.order).map(pubMediaItem),
       usage: budgetSummary(userId),
-      compatibility,
+      roomItems,
+      compatibility: needsCompatibility ? { status:'queued' } : { status:'not-needed' },
     });
+    if (needsCompatibility) setImmediate(() => startCompatibleTranscode(entry));
   } catch(e){res.status(500).json({error:e.message});}
 });
 

@@ -217,13 +217,24 @@ async function apiUpload(path, file, progIds, extraFields = {}) {
       if (fill) fill.style.width = p + '%';
       if (lbl) lbl.textContent = `Uploading… ${p}%`;
     };
+    xhr.upload.onload = () => {
+      if (fill) fill.style.width = '100%';
+      if (lbl) lbl.textContent = 'Upload complete — saving to library…';
+    };
     xhr.onload = () => {
-      if (prog) prog.classList.add('hidden');
       try {
         const d = JSON.parse(xhr.responseText || '{}');
-        if (xhr.status >= 200 && xhr.status < 300) resolve(d);
-        else reject(new Error(d.error || 'Upload failed'));
+        if (xhr.status >= 200 && xhr.status < 300) {
+          if (fill) fill.style.width = '100%';
+          if (lbl) lbl.textContent = 'Saved to library ✓';
+          if (prog) setTimeout(() => prog.classList.add('hidden'), 650);
+          resolve(d);
+        } else {
+          if (prog) prog.classList.add('hidden');
+          reject(new Error(d.error || 'Upload failed'));
+        }
       } catch {
+        if (prog) prog.classList.add('hidden');
         reject(new Error('Upload failed'));
       }
     };
@@ -1758,7 +1769,8 @@ async function uploadLibraryMedia(input, progIds) {
     const res = await apiUpload('/library/upload', file, progIds);
     S.libraryRenameTarget = res.video?.id || null;
     setLibraryState(res.items, res.usage);
-    toast(res.compatibility?.status === 'processing' ? 'Saved. Preparing a browser-compatible version…' : 'Saved to library. Rename it if you want.');
+    if (S.room && Array.isArray(res.roomItems)) renderMediaList(res.roomItems);
+    toast(res.compatibility?.status === 'queued' ? 'Saved. Compatible playback is preparing in the background.' : 'Saved to library. Rename it if you want.');
   } catch (e) {
     toast(e.message);
   }
