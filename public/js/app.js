@@ -83,6 +83,7 @@ const S = {
   _lastIframeState: null,
   _embedSyncPulseTimer: null,
   _embedSyncPulseCount: 0,
+  _partnerUploadTimer: null,
   _lastSyncState: { state:'offline', text:'Ready' },
   // WebRTC
   rtc: null,
@@ -197,6 +198,9 @@ async function api(method, path, body) {
 }
 async function apiUpload(path, file, progIds, extraFields = {}) {
   return await new Promise((resolve, reject) => {
+    let lastSharedPercent = -1;
+    let settled = false;
+    let saveTimer = null;
     const prog = progIds?.prog ? $(progIds.prog) : null;
     const fill = progIds?.fill ? $(progIds.fill) : null;
     const lbl = progIds?.label ? $(progIds.label) : null;
@@ -210,39 +214,71 @@ async function apiUpload(path, file, progIds, extraFields = {}) {
     });
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api'+path);
+    // Large uploads may take as long as needed. After the browser has sent all
+    // bytes, keep the request connected and show a clear status instead of an
+    // endless, unexplained 100% saving state.
+    const finish = (error, data) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(saveTimer);
+      if (error) {
+        if (prog) prog.classList.add('hidden');
+        shareUploadProgress(file, 0, 'failed');
+        reject(error);
+      } else {
+        if (fill) fill.style.width = '100%';
+        if (lbl) lbl.textContent = 'Saved to library ✓';
+        if (prog) setTimeout(() => prog.classList.add('hidden'), 650);
+        shareUploadProgress(file, 100, 'complete');
+        resolve(data);
+      }
+    };
     if (S.token) xhr.setRequestHeader('Authorization', 'Bearer ' + S.token);
     xhr.upload.onprogress = e => {
       if (!e.lengthComputable) return;
       const p = Math.round(e.loaded / e.total * 100);
       if (fill) fill.style.width = p + '%';
       if (lbl) lbl.textContent = `Uploading… ${p}%`;
+      if (p === 100 || p - lastSharedPercent >= 2) {
+        lastSharedPercent = p;
+        shareUploadProgress(file, p, 'uploading');
+      }
     };
     xhr.upload.onload = () => {
       if (fill) fill.style.width = '100%';
       if (lbl) lbl.textContent = 'Upload complete — saving to library…';
+      shareUploadProgress(file, 100, 'saving');
+      saveTimer = setTimeout(() => {
+        if (!settled && lbl) lbl.textContent = 'Still saving — keeping this upload connected…';
+      }, 15000);
     };
     xhr.onload = () => {
       try {
         const d = JSON.parse(xhr.responseText || '{}');
         if (xhr.status >= 200 && xhr.status < 300) {
-          if (fill) fill.style.width = '100%';
-          if (lbl) lbl.textContent = 'Saved to library ✓';
-          if (prog) setTimeout(() => prog.classList.add('hidden'), 650);
-          resolve(d);
+          finish(null, d);
         } else {
-          if (prog) prog.classList.add('hidden');
-          reject(new Error(d.error || 'Upload failed'));
+          finish(new Error(d.error || 'Upload failed'));
         }
       } catch {
-        if (prog) prog.classList.add('hidden');
-        reject(new Error('Upload failed'));
+        finish(new Error('Upload failed: invalid server response'));
       }
     };
     xhr.onerror = () => {
-      if (prog) prog.classList.add('hidden');
-      reject(new Error('Upload failed'));
+      finish(new Error('Upload failed: connection was interrupted'));
     };
+    xhr.onabort = () => finish(new Error('Upload was cancelled'));
     xhr.send(form);
+  });
+}
+function shareUploadProgress(file, percent, status) {
+  if (!S.socket?.connected || !S.room?.id) return;
+  S.socket.emit('media_upload_progress', {
+    roomId:S.room.id,
+    fileName:String(file?.name || 'Video').slice(0, 120),
+    fileSize:Number(file?.size) || 0,
+    percent:Math.max(0, Math.min(100, Number(percent) || 0)),
+    status,
   });
 }
 const $  = id => document.getElementById(id);
@@ -959,7 +995,6 @@ function enterRoom(room, password) {
   // Reset UI
   $('chat-box').innerHTML='<div class="chat-mt"><div class="cmt-icon">💬</div><p>Say hello!</p></div>';
   $('fc-msgs').innerHTML='';
-  $('media-list').innerHTML='<div class="media-mt"><div style="font-size:2rem;opacity:.2">📁</div><p>No uploads yet</p></div>';
   setSidebar(true); sbTab('chat');
   buildEmojiStrips();
   renderQuickActions();
@@ -1061,6 +1096,7 @@ function connectSocket(room, password) {
       renderBudgetUI();
     }
   });
+  S.socket.on('media_upload_progress', showPartnerUploadProgress);
 
   // BUG FIX #8: partner mute
   S.socket.on('partner_mute',({user,muted})=>setPartnerMuteUI(user,muted));
@@ -1073,6 +1109,27 @@ function connectSocket(room, password) {
 }
 
 // ── Room UI update — BUG FIX #4 #5 ──────────────────────────────────────────
+function showPartnerUploadProgress(payload) {
+  if (!payload || payload.user?.id === S.user?.id) return;
+  const prog = $('partner-up-prog');
+  const fill = $('partner-up-fill');
+  const label = $('partner-up-lbl');
+  if (!prog || !fill || !label) return;
+  const percent = Math.max(0, Math.min(100, Number(payload.percent) || 0));
+  const partner = payload.user?.displayName || 'Partner';
+  const filename = String(payload.fileName || 'a video');
+  clearTimeout(S._partnerUploadTimer);
+  prog.classList.remove('hidden');
+  fill.style.width = percent + '%';
+  if (payload.status === 'saving') label.textContent = `${partner} uploaded ${filename} — saving…`;
+  else if (payload.status === 'complete') label.textContent = `${partner} saved ${filename} ✓`;
+  else if (payload.status === 'failed') label.textContent = `${partner}'s upload could not be saved`;
+  else label.textContent = `${partner} is uploading ${filename} — ${percent}%`;
+  if (payload.status === 'complete' || payload.status === 'failed') {
+    S._partnerUploadTimer = setTimeout(() => prog.classList.add('hidden'), 2200);
+  }
+}
+
 function updateRoomUI(room) {
   S.room=room; S.isOwner=room.isOwner;
   const owner=room.owner, guest=room.guest;

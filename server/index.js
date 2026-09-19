@@ -424,7 +424,7 @@ app.get('/api/rooms/:id', authMw, async (req,res) => {
 
 app.post('/api/library/upload', authMw, uploadVideo.single('video'), (req,res) => {
   try {
-    if(!req.file) return res.status(400).json({error:'No file'});
+    if(!req.file) return res.status(400).json({error:'No supported video file was received.'});
     const currentUsage = totalLibraryBytes();
     if (currentUsage + req.file.size > MEDIA_BUDGET_BYTES) {
       try { fs.unlinkSync(req.file.path); } catch {}
@@ -438,7 +438,13 @@ app.post('/api/library/upload', authMw, uploadVideo.single('video'), (req,res) =
       size:req.file.size,uploadedAt:Date.now(),order:library.length};
     entry.url = '/api/media/' + entry.id + '/stream';
     library.push(entry);
-    saveLibraries();
+    try {
+      saveLibraries();
+    } catch (error) {
+      library.pop();
+      try { fs.unlinkSync(req.file.path); } catch {}
+      throw new Error('Could not save this video to the library. Please try again.');
+    }
     refreshRoomsForUser(userId);
     const roomItems = activeRoomMediaForUser(userId);
     const needsCompatibility = !NATIVE_VIDEO_EXTENSIONS.has(path.extname(entry.filename).toLowerCase());
@@ -642,6 +648,20 @@ io.on('connection', socket => {
   });
 
   // ── owner_sync: heartbeat + events ────────────────────────────────────────
+  socket.on('media_upload_progress', ({ roomId, fileName, fileSize, percent, status } = {}) => {
+    const room = rooms.get(String(roomId || '').toUpperCase());
+    const session = sessions.get(socket.id);
+    if (!room || !session || session.roomId !== room.id) return;
+    const safeStatus = ['uploading', 'saving', 'complete', 'failed'].includes(status) ? status : 'uploading';
+    socket.to(room.id).emit('media_upload_progress', {
+      user:uPub(user),
+      fileName:String(fileName || 'Video').replace(/[\r\n]/g, ' ').trim().slice(0, 120) || 'Video',
+      fileSize:Math.max(0, Number(fileSize) || 0),
+      percent:Math.max(0, Math.min(100, Number(percent) || 0)),
+      status:safeStatus,
+    });
+  });
+
   socket.on('owner_sync',({roomId,playing,time,isSeeked})=>{
     const room=rooms.get(roomId);
     if(!room||room.ownerId!==userId) return;
