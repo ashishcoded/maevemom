@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const multer     = require('multer');
 const path       = require('path');
 const fs         = require('fs');
+const { spawn }  = require('child_process');
 
 const app    = express();
 const server = http.createServer(app);
@@ -24,6 +25,10 @@ app.use(express.static(path.join(__dirname, '../public')));
 const JWT_SECRET = process.env.JWT_SECRET || 'maevemom_v5_9Tz4Rp2X';
 const PORT = process.env.PORT || 3000;
 const MEDIA_BUDGET_BYTES = Number(process.env.MEDIA_BUDGET_BYTES || (12 * 1024 * 1024 * 1024));
+const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_BYTES || (20 * 1024 * 1024 * 1024));
+const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
+const VIDEO_EXTENSIONS = new Set(['.mp4','.m4v','.webm','.mkv','.mov','.avi','.ogv','.ogg','.mpg','.mpeg','.m2ts','.mts','.ts','.wmv','.flv','.3gp','.3g2','.asf','.divx','.f4v','.vob','.rm','.rmvb']);
+const NATIVE_VIDEO_EXTENSIONS = new Set(['.mp4','.m4v','.webm','.ogv']);
 
 // ── Uploads ────────────────────────────────────────────────────────────────────
 const uploadsDir = path.join(__dirname, '../public/uploads');
@@ -36,7 +41,14 @@ const mkStore = pfx => multer.diskStorage({
   destination: (_, __, cb) => cb(null, uploadsDir),
   filename:    (_, f, cb) => cb(null, (pfx||'')+uuidv4()+path.extname(f.originalname).toLowerCase())
 });
-const uploadVideo  = multer({ storage: mkStore(),     limits:{ fileSize: 4*1024*1024*1024 }, fileFilter:(_,f,cb)=>cb(null,['.mp4','.webm','.mkv','.mov','.avi','.m4v','.ogv'].includes(path.extname(f.originalname).toLowerCase())) });
+const uploadVideo  = multer({
+  storage: mkStore(),
+  limits:{ fileSize: MAX_UPLOAD_BYTES },
+  fileFilter:(_,f,cb)=>{
+    const extension = path.extname(f.originalname).toLowerCase();
+    cb(null, VIDEO_EXTENSIONS.has(extension) || String(f.mimetype || '').startsWith('video/'));
+  }
+});
 const uploadAvatar = multer({ storage: mkStore('av_'), limits:{ fileSize: 8*1024*1024 }, fileFilter:(_,f,cb)=>cb(null,f.mimetype.startsWith('image/')) });
 
 // ── Stores ─────────────────────────────────────────────────────────────────────
@@ -114,11 +126,70 @@ function pubMediaItem(item) {
     ownerAvatarColor: owner ? owner.avatarColor : '#444',
     filename: item.filename,
     originalName: item.originalName,
-    url: item.url,
+    url: '/api/media/' + item.id + '/stream',
+    compatibleUrl: '/api/media/' + item.id + '/stream?variant=compatible',
+    requiresCompatibility: !NATIVE_VIDEO_EXTENSIONS.has(path.extname(item.filename || '').toLowerCase()),
     size: item.size,
     uploadedAt: item.uploadedAt,
     order: item.order,
   };
+}
+
+const transcodes = new Map();
+function compatibleFilename(item) {
+  return item.filename + '.compatible.mp4';
+}
+function findMediaItem(mediaId) {
+  for (const items of libraries.values()) {
+    const item = items.find(entry => entry.id === mediaId);
+    if (item) return item;
+  }
+  return null;
+}
+function compatiblePath(item) {
+  return path.join(uploadsDir, compatibleFilename(item));
+}
+function compatibleStatus(item) {
+  if (!item) return { status:'missing' };
+  if (fs.existsSync(compatiblePath(item))) return { status:'ready' };
+  return transcodes.get(item.id) || { status:'idle' };
+}
+function startCompatibleTranscode(item) {
+  const current = compatibleStatus(item);
+  if (current.status !== 'idle') return current;
+  const source = path.join(uploadsDir, item.filename);
+  const output = compatiblePath(item);
+  if (!fs.existsSync(source)) return { status:'missing' };
+
+  const state = { status:'processing' };
+  transcodes.set(item.id, state);
+  let child;
+  try {
+    child = spawn(FFMPEG_PATH, [
+      '-y', '-i', source,
+      '-map', '0:v:0?', '-map', '0:a?',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
+      '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', output
+    ], { windowsHide:true });
+  } catch (error) {
+    state.status = 'unavailable';
+    state.error = error.message;
+    return state;
+  }
+  child.once('error', error => {
+    state.status = 'unavailable';
+    state.error = error.message;
+    try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
+  });
+  child.once('close', code => {
+    if (code === 0 && fs.existsSync(output)) {
+      transcodes.set(item.id, { status:'ready' });
+    } else {
+      transcodes.set(item.id, { status:'failed', error:'FFmpeg could not convert this video.' });
+      try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
+    }
+  });
+  return state;
 }
 function normalizeMediaDisplayName(rawName, fallbackName) {
   const fallback = String(fallbackName || 'Video').trim() || 'Video';
@@ -355,15 +426,20 @@ app.post('/api/library/upload', authMw, uploadVideo.single('video'), (req,res) =
     const library = ensureLibrary(userId);
     const displayName = normalizeMediaDisplayName(req.body?.customName, req.file.originalname);
     const entry={id:uuidv4().slice(0,8),ownerId:userId,filename:req.file.filename,
-      originalName:displayName,url:'/uploads/'+req.file.filename,
+      originalName:displayName,url:'',
       size:req.file.size,uploadedAt:Date.now(),order:library.length};
+    entry.url = '/api/media/' + entry.id + '/stream';
     library.push(entry);
     saveLibraries();
+    const compatibility = !NATIVE_VIDEO_EXTENSIONS.has(path.extname(entry.filename).toLowerCase())
+      ? startCompatibleTranscode(entry)
+      : { status:'not-needed' };
     refreshRoomsForUser(userId);
     res.json({
       video: pubMediaItem(entry),
       items: library.slice().sort((a,b)=>a.order-b.order).map(pubMediaItem),
       usage: budgetSummary(userId),
+      compatibility,
     });
   } catch(e){res.status(500).json({error:e.message});}
 });
@@ -415,6 +491,7 @@ app.delete('/api/library/:mediaId', authMw, (req,res) => {
     saveLibraries();
     if (entry?.filename) {
       try { fs.unlinkSync(path.join(uploadsDir, entry.filename)); } catch {}
+      try { fs.unlinkSync(compatiblePath(entry)); } catch {}
     }
     refreshRoomsForUser(userId);
     res.json({
@@ -423,6 +500,60 @@ app.delete('/api/library/:mediaId', authMw, (req,res) => {
       usage: budgetSummary(userId),
     });
   } catch(e){res.status(500).json({error:e.message});}
+});
+
+app.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error:`Video is too large. Maximum upload size is ${Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024 / 1024)} GB.` });
+  }
+  if (error) return res.status(400).json({ error:error.message || 'Upload failed' });
+  next();
+});
+
+const mediaContentTypes = {
+  '.mp4':'video/mp4', '.m4v':'video/mp4', '.webm':'video/webm', '.ogv':'video/ogg',
+  '.ogg':'video/ogg', '.mov':'video/quicktime', '.mkv':'video/x-matroska', '.avi':'video/x-msvideo',
+  '.ts':'video/mp2t', '.m2ts':'video/mp2t', '.wmv':'video/x-ms-wmv', '.flv':'video/x-flv',
+};
+function streamMediaFile(req, res, filePath) {
+  fs.stat(filePath, (error, stats) => {
+    if (error || !stats.isFile()) return res.status(404).json({ error:'Video file not found' });
+    const total = stats.size;
+    const range = req.headers.range;
+    const contentType = mediaContentTypes[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('Content-Type', contentType);
+    if (!range) {
+      res.setHeader('Content-Length', total);
+      return fs.createReadStream(filePath).pipe(res);
+    }
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (!match) return res.status(416).set('Content-Range', `bytes */${total}`).end();
+    const start = match[1] === '' ? Math.max(0, total - Number(match[2])) : Number(match[1]);
+    const end = match[2] === '' ? total - 1 : Math.min(Number(match[2]), total - 1);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= total) {
+      return res.status(416).set('Content-Range', `bytes */${total}`).end();
+    }
+    res.status(206).set({
+      'Content-Range': `bytes ${start}-${end}/${total}`,
+      'Content-Length': end - start + 1,
+    });
+    fs.createReadStream(filePath, { start, end }).pipe(res);
+  });
+}
+app.get('/api/media/:mediaId/stream', (req,res) => {
+  const item = findMediaItem(req.params.mediaId);
+  if (!item) return res.status(404).json({ error:'Video not found' });
+  const useCompatible = req.query.variant === 'compatible';
+  const filePath = path.join(uploadsDir, useCompatible ? compatibleFilename(item) : item.filename);
+  streamMediaFile(req, res, filePath);
+});
+app.post('/api/library/:mediaId/compatible', authMw, (req,res) => {
+  const item = findMediaItem(req.params.mediaId);
+  if (!item) return res.status(404).json({ error:'Video not found' });
+  const status = startCompatibleTranscode(item);
+  res.json({ ...status, url: status.status === 'ready' ? '/api/media/' + item.id + '/stream?variant=compatible' : null });
 });
 
 app.use('/uploads', express.static(uploadsDir));

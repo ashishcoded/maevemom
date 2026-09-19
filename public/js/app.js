@@ -1029,7 +1029,7 @@ function connectSocket(room, password) {
   // Client only loads if URL changed (dedup)
   S.socket.on('video_changed',({video})=>{
     if(video.url !== S.vid.url) {
-      loadVidUrl(video.url, video.title, video.meta, video.type);
+      loadVidUrl(video.url, video.title, video.meta, video.type, video.mediaId);
     }
     startSyncTimers();
   });
@@ -1095,7 +1095,7 @@ function updateRoomUI(room) {
     renderBudgetUI();
   }
   renderMediaList(room.uploadedVideos || []);
-  if(room.video&&room.video.url!==S.vid.url) loadVidUrl(room.video.url,room.video.title,room.video.meta,room.video.type);
+  if(room.video&&room.video.url!==S.vid.url) loadVidUrl(room.video.url,room.video.title,room.video.meta,room.video.type,room.video.mediaId);
   if(!room.video && S.vid.url) resetPlayerUI();
   updatePlayerControls();
   updateFloatChatVisibility();
@@ -1430,12 +1430,21 @@ function loadVidUrl(url,title,meta,type) {
   if(type==='direct'){
     fr.style.display='none';pempty.style.display='none';
     const vid=document.createElement('video');
-    vid.src=safeUrl;vid.controls=true;
+    vid.src=safeUrl;vid.controls=true;vid.preload='auto';
     vid.style.cssText='width:100%;height:100%;background:#000;display:block';
     if(S.isOwner){
       vid.addEventListener('play',  ()=>{clockTick(true, vid.currentTime); sendOwnerSync(true, vid.currentTime);});
       vid.addEventListener('pause', ()=>{clockTick(false,vid.currentTime); sendOwnerSync(false,vid.currentTime);});
       vid.addEventListener('seeked',()=>{clockTick(!vid.paused,vid.currentTime); sendOwnerSync(!vid.paused,vid.currentTime,true);});
+    }
+    const sourceMediaId = (safeUrl.match(/\/api\/media\/([^/?]+)\/stream/i) || [])[1];
+    if (sourceMediaId) {
+      let fallbackStarted = false;
+      vid.addEventListener('error', () => {
+        if (fallbackStarted || vid.dataset.compatible === 'true') return;
+        fallbackStarted = true;
+        loadCompatibleVideo(vid, sourceMediaId);
+      });
     }
     player.appendChild(vid);
     S._nativeVid=vid;
@@ -1466,6 +1475,38 @@ function loadVidUrl(url,title,meta,type) {
 // Owner maintains a JS clock as source of truth for iframe players.
 // Heartbeat every 2s broadcasts current time+playing to all guests.
 // This works regardless of whether the iframe sends postMessage events.
+
+async function loadCompatibleVideo(video, mediaId) {
+  const resumeAt = Number(video.currentTime) || 0;
+  const shouldPlay = !video.paused;
+  setPlayerConnecting(true, 'Preparing video…', 'Converting this format for browser playback');
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    try {
+      const result = await api('POST', '/library/' + encodeURIComponent(mediaId) + '/compatible');
+      if (result.status === 'ready' && result.url) {
+        video.dataset.compatible = 'true';
+        video.src = result.url;
+        video.load();
+        video.addEventListener('loadedmetadata', () => {
+          try { video.currentTime = resumeAt; } catch {}
+          if (shouldPlay) video.play().catch(() => {});
+        }, { once:true });
+        setPlayerConnecting(false);
+        toast('Playing browser-compatible stream');
+        return;
+      }
+      if (result.status === 'unavailable') throw new Error('FFmpeg is not installed on this server. Install it to play MKV, HEVC, AVI and other unsupported formats.');
+      if (result.status === 'failed') throw new Error(result.error || 'This video could not be converted.');
+    } catch (error) {
+      setPlayerConnecting(false);
+      toast(error.message || 'This video format is not supported by this browser.');
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  setPlayerConnecting(false);
+  toast('Video conversion is taking longer than expected. Keep this tab open and try again shortly.');
+}
 
 function clockTick(playing, time) {
   S._clock={playing,time:Number(time)||0,ts:Date.now()};
@@ -1717,7 +1758,7 @@ async function uploadLibraryMedia(input, progIds) {
     const res = await apiUpload('/library/upload', file, progIds);
     S.libraryRenameTarget = res.video?.id || null;
     setLibraryState(res.items, res.usage);
-    toast('Saved to library. Rename it if you want.');
+    toast(res.compatibility?.status === 'processing' ? 'Saved. Preparing a browser-compatible version…' : 'Saved to library. Rename it if you want.');
   } catch (e) {
     toast(e.message);
   }
@@ -1888,7 +1929,7 @@ function makeMediaItem(v, opts = {}) {
   return d;
 }
 function playMediaItem(v){
-  if(S.socket&&S.room)S.socket.emit('set_video',{roomId:S.room.id,video:{url:v.url,title:v.originalName,meta:`Saved by ${v.ownerName||'You'}`,type:'direct'}});
+  if(S.socket&&S.room)S.socket.emit('set_video',{roomId:S.room.id,video:{url:v.url,title:v.originalName,meta:`Saved by ${v.ownerName||'You'}`,type:'direct',mediaId:v.id}});
   loadVidUrl(v.url,v.originalName,`Saved by ${v.ownerName||'You'}`,'direct');sbTab('chat');toast('Playing: '+v.originalName);
 }
 function fmtSz(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';if(b<1073741824)return(b/1048576).toFixed(1)+'MB';return(b/1073741824).toFixed(2)+'GB';}

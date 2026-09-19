@@ -155,7 +155,16 @@ Same — connect GitHub, auto-deploy.
 ```
 JWT_SECRET=your_random_secret_here
 PORT=3000
+MAX_UPLOAD_BYTES=21474836480
+MEDIA_BUDGET_BYTES=12884901888
+FFMPEG_PATH=ffmpeg
 ```
+
+### Large files and movie formats
+
+Uploads support common movie containers such as MP4, MKV, HEVC/H.265 files, AVI, MOV, M4V, TS/M2TS, WMV, FLV, MPEG and 3GP. Files are served with HTTP range requests, so playback seeks and buffers in chunks instead of downloading the whole movie first.
+
+Browsers do not natively decode every codec (notably many MKV, HEVC/H.265 and AVI downloads). Install [FFmpeg](https://ffmpeg.org/download.html) on the server and ensure `ffmpeg` is on `PATH`, or set `FFMPEG_PATH` to its executable. The app then creates a browser-compatible H.264/AAC MP4 stream automatically when the original cannot play. Conversion runs after upload and can take time for very large movies; upload progress remains separate from conversion progress.
 
 ---
 

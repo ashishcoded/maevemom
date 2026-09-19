@@ -73,6 +73,11 @@
         <div class="hero-tag">✦ Private Cinema</div>
         <h2 class="hero-h">WATCH TOGETHER.<br><span class="hero-h-sub">FEEL TOGETHER.</span></h2>
         <p class="hero-p">Create a private room, load any content — fully synced, zero friction.</p>
+        <section class="update-card" aria-label="Latest website update">
+          <div class="update-card-top"><span class="update-live-dot"></span><span>New Update</span><span class="update-live-label">LIVE</span></div>
+          <p>Long movie uploads, faster range streaming, and improved watch-together sync are now available.</p>
+          <div class="update-pills"><span>Large uploads</span><span>More video formats</span><span>Better streaming</span></div>
+        </section>
         <div class="hero-library-card">
           <button class="hero-library-btn" onclick="openLibraryModal()"><span class="hero-library-ico">📚</span><span>Open Saved Library</span></button>
           <div class="hero-budget">
@@ -457,7 +462,7 @@
       <div class="sb-panel hidden" id="p-media">
         <div class="media-hdr">
           <span>Shared Media Library</span>
-          <label class="up-lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> Save<input type="file" id="up-inp" accept="video/*" style="display:none" onchange="uploadVid(this)"></label>
+          <label class="up-lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> Save<input type="file" id="up-inp" accept="video/*,.mkv,.avi,.mov,.m4v,.m2ts,.mts,.ts,.wmv,.flv,.3gp,.mpeg,.mpg,.vob" style="display:none" onchange="uploadVid(this)"></label>
         </div>
         <div class="media-budget">
           <div class="media-budget-row"><span>Server capacity</span><span id="room-budget-text">0 GB / 12 GB</span></div>
@@ -565,7 +570,7 @@
     </div>
     <div class="media-hdr media-hdr-home">
       <span>My Playlist</span>
-      <label class="up-lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> Upload<input type="file" id="home-up-inp" accept="video/*" style="display:none" onchange="uploadHomeMedia(this)"></label>
+      <label class="up-lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> Upload<input type="file" id="home-up-inp" accept="video/*,.mkv,.avi,.mov,.m4v,.m2ts,.mts,.ts,.wmv,.flv,.3gp,.mpeg,.mpg,.vob" style="display:none" onchange="uploadHomeMedia(this)"></label>
     </div>
     <div class="up-prog hidden" id="home-up-prog"><div class="up-track"><div class="up-fill" id="home-up-fill"></div></div><span id="home-up-lbl">Uploading…</span></div>
     <div class="library-list" id="home-media-list"><div class="media-mt"><div style="font-size:2rem;opacity:.2">🎞</div><p>No saved media yet</p></div></div>

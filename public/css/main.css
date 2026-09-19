@@ -106,6 +106,15 @@ img.emoji-ios{display:block;user-select:none;-webkit-user-drag:none;filter:drop-
 .hero-h{font-family:var(--f-cine);font-size:clamp(2.2rem,5.5vw,4rem);letter-spacing:.08em;line-height:1;margin-bottom:.5rem}
 .hero-h-sub{color:var(--t2);font-size:clamp(1.8rem,4.5vw,3.2rem)}
 .hero-p{color:var(--t2);font-size:.88rem;max-width:340px;line-height:1.7;margin-bottom:2rem}
+.update-card{position:relative;max-width:360px;margin:-.75rem 0 1.35rem;padding:.85rem 1rem;border:1px solid rgba(229,9,20,.3);border-radius:14px;background:linear-gradient(135deg,rgba(229,9,20,.15),rgba(255,255,255,.045));box-shadow:0 12px 30px rgba(0,0,0,.16);overflow:hidden}
+.update-card:before{content:'';position:absolute;inset:0 auto 0 0;width:3px;background:linear-gradient(#ff6b9d,#e50914)}
+.update-card-top{display:flex;align-items:center;gap:7px;color:#fff;font-size:.72rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
+.update-live-dot{width:7px;height:7px;border-radius:50%;background:#42d392;box-shadow:0 0 0 4px rgba(66,211,146,.12);animation:update-pulse 1.8s ease-out infinite}
+.update-live-label{margin-left:auto;padding:3px 6px;border-radius:999px;background:rgba(66,211,146,.13);color:#6ee7b7;font-size:.58rem;letter-spacing:.12em}
+.update-card p{margin:.55rem 0 .7rem;color:var(--t2);font-size:.75rem;line-height:1.5}
+.update-pills{display:flex;gap:5px;flex-wrap:wrap}
+.update-pills span{padding:3px 7px;border:1px solid rgba(255,255,255,.1);border-radius:999px;color:var(--t3);font-size:.61rem;background:rgba(0,0,0,.14)}
+@keyframes update-pulse{0%,100%{box-shadow:0 0 0 4px rgba(66,211,146,.12)}55%{box-shadow:0 0 0 8px rgba(66,211,146,0)}}
 .hero-library-card{display:grid;gap:.8rem;max-width:360px;margin:-.4rem 0 1.4rem}
 .hero-library-btn{display:flex;align-items:center;justify-content:center;gap:9px;background:linear-gradient(135deg,rgba(255,255,255,.1),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.1);color:var(--t);border-radius:14px;padding:.85rem 1rem;font-size:.85rem;font-weight:600;transition:var(--tr)}
 .hero-library-btn:hover{transform:translateY(-1px);background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.07));border-color:rgba(255,255,255,.16)}
