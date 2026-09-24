@@ -128,7 +128,12 @@ Create a `.env` file or set in your hosting dashboard:
 ```
 JWT_SECRET=your_random_secret_here_make_it_long
 PORT=3000
+# Mount a persistent disk/volume and point this at its mount path.
+# Stores both video files and the saved-library index on that volume.
+STORAGE_DIR=/var/data
 ```
+
+Large uploads are sent in sequential 8 MiB chunks, but the hosting service still needs enough disk space for the original video and (when required) a converted playback copy. Configure `STORAGE_DIR` to a persistent volume on the host; without it, the default `public/uploads` and `data/libraries.json` paths are local app storage and may be erased when a hosted instance restarts or redeploys. The server's default library budget is 12 GiB and the per-file limit is 20 GiB; a host's own disk and request limits can be lower.
 
 ---
 

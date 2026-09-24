@@ -183,6 +183,8 @@ async function api(method, path, body) {
   const h = { 'Content-Type':'application/json' };
   if (S.token) h.Authorization = 'Bearer ' + S.token;
   const r = await fetch('/api'+path, { method, headers:h, body:body?JSON.stringify(body):undefined });
+  const upgradedToken=r.headers.get('X-Auth-Token');
+  if(upgradedToken){S.token=upgradedToken;localStorage.setItem('mm_tok',upgradedToken);}
   const ct = r.headers.get('content-type') || '';
   const raw = await r.text();
   let d = {};
@@ -197,6 +199,7 @@ async function api(method, path, body) {
   return d;
 }
 async function apiUpload(path, file, progIds, extraFields = {}) {
+  if (file.size > 8 * 1024 * 1024) return await apiChunkUpload(file, progIds);
   return await new Promise((resolve, reject) => {
     let lastSharedPercent = -1;
     let settled = false;
@@ -270,6 +273,69 @@ async function apiUpload(path, file, progIds, extraFields = {}) {
     xhr.onabort = () => finish(new Error('Upload was cancelled'));
     xhr.send(form);
   });
+}
+async function apiChunkUpload(file, progIds) {
+  const prog = progIds?.prog ? $(progIds.prog) : null;
+  const fill = progIds?.fill ? $(progIds.fill) : null;
+  const lbl = progIds?.label ? $(progIds.label) : null;
+  let uploadId = null;
+  if (prog) prog.classList.remove('hidden');
+  if (fill) fill.style.width = '0%';
+  const updateProgress = (sent, status='uploading') => {
+    const percent = Math.min(100, Math.round(sent / file.size * 100));
+    if (fill) fill.style.width = percent + '%';
+    if (lbl) lbl.textContent = status === 'saving' ? 'Upload complete — saving to library…' : `Uploading… ${percent}%`;
+    shareUploadProgress(file, percent, status);
+  };
+  try {
+    const started = await api('POST', '/library/upload/start', { name:file.name, size:file.size });
+    uploadId = started.uploadId;
+    const chunkSize = Math.min(Number(started.chunkSize) || 8 * 1024 * 1024, 8 * 1024 * 1024);
+    for (let offset = 0; offset < file.size;) {
+      const chunk = file.slice(offset, Math.min(offset + chunkSize, file.size));
+      let received = false;
+      for (let attempt = 0; attempt < 2 && !received; attempt += 1) {
+        try {
+          await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', `/api/library/upload/${encodeURIComponent(uploadId)}/chunk`);
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.setRequestHeader('Upload-Offset', String(offset));
+            if (S.token) xhr.setRequestHeader('Authorization', 'Bearer ' + S.token);
+            xhr.upload.onprogress = event => { if (event.lengthComputable) updateProgress(offset + event.loaded); };
+            xhr.onload = () => {
+              let data = {};
+              try { data = JSON.parse(xhr.responseText || '{}'); } catch {}
+              if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+              else reject(new Error(data.error || 'Could not save an upload chunk'));
+            };
+            xhr.onerror = () => reject(new Error('Connection interrupted while uploading. Retry the upload.'));
+            xhr.onabort = () => reject(new Error('Upload was cancelled'));
+            xhr.send(chunk);
+          });
+          received = true;
+        } catch (error) {
+          if (attempt === 1) throw error;
+          const status = await api('GET', `/library/upload/${encodeURIComponent(uploadId)}`);
+          if (status.received === offset + chunk.size) received = true;
+          else if (status.received !== offset) throw error;
+        }
+      }
+      offset += chunk.size;
+      updateProgress(offset);
+    }
+    updateProgress(file.size, 'saving');
+    const result = await api('POST', `/library/upload/${encodeURIComponent(uploadId)}/complete`, {});
+    updateProgress(file.size, 'complete');
+    if (lbl) lbl.textContent = 'Saved to library ✓';
+    if (prog) setTimeout(() => prog.classList.add('hidden'), 650);
+    return result;
+  } catch (error) {
+    if (uploadId) api('DELETE', `/library/upload/${encodeURIComponent(uploadId)}`).catch(() => {});
+    if (prog) prog.classList.add('hidden');
+    shareUploadProgress(file, 0, 'failed');
+    throw error;
+  }
 }
 function shareUploadProgress(file, percent, status) {
   if (!S.socket?.connected || !S.room?.id) return;
@@ -784,16 +850,121 @@ function goAuth() { setScreen('auth'); }
 function goRoom() { setScreen('room'); }
 function goHome() {
   setScreen('home');
+  openHomeTab('home');
   if (!S.user) return;
   const av = $('hn-av');
   av.style.background = S.user.avatarColor;
   av.innerHTML = S.user.avatarUrl ? `<img src="${S.user.avatarUrl}" alt="">` : S.user.avatar;
   $('hn-nm').textContent = S.user.displayName;
-  $('h-greet').textContent = `${S.user.displayName}'s cinema is ready`;
+  const popAv = $('hn-pop-av');
+  if (popAv) {
+    popAv.style.background = S.user.avatarColor;
+    popAv.innerHTML = S.user.avatarUrl ? `<img src="${S.user.avatarUrl}" alt="">` : S.user.avatar;
+  }
+  if ($('hn-pop-name')) $('hn-pop-name').textContent = S.user.displayName;
+  if ($('hn-pop-handle')) $('hn-pop-handle').textContent = `@${S.user.username}`;
+  if ($('h-greet')) $('h-greet').textContent = `${S.user.displayName}'s cinema is ready`;
   buildHomeCards();
   loadLibrary(true);
   history.replaceState({},'','/');
 }
+window.openHomeTab = tab => {
+  const valid = ['home','party','library','reward'];
+  if (!valid.includes(tab)) tab = 'home';
+  closeProfileMenu();
+  $$('.hn-tab').forEach(button => button.classList.toggle('active', button.dataset.homeTab === tab));
+  $$('.home-panel').forEach(panel => panel.classList.toggle('hidden', panel.dataset.panel !== tab));
+  if (tab === 'library') {
+    openLibraryModal();
+    // The saved-library interface remains the existing modal so upload, ordering,
+    // deletion, storage budget, and API behaviour are all reused unchanged.
+    $$('.home-panel').forEach(panel => panel.classList.toggle('hidden', panel.dataset.panel !== 'home'));
+  }
+};
+function closeProfileMenu() {
+  const wrap = document.querySelector('.hn-profile-wrap');
+  const button = document.querySelector('.hn-prof');
+  wrap?.classList.remove('is-open');
+  button?.setAttribute('aria-expanded', 'false');
+}
+let quickAlertContacts = [];
+let quickAlertMode = 'list';
+const alertEsc = value => String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+window.toggleQuickAlert = async event => {
+  event?.stopPropagation();
+  const panel = $('quick-alert-panel');
+  if (panel?.classList.contains('is-open')) return closeQuickAlert();
+  closeProfileMenu();
+  document.querySelector('.hn-profile-wrap')?.classList.add('qa-active');
+  panel?.classList.add('is-open'); panel?.setAttribute('aria-hidden','false');
+  quickAlertMode = 'list';
+  try { const result = await api('GET','/alerts/contacts'); quickAlertContacts = result.contacts || []; renderQuickAlert(); }
+  catch (error) { $('qa-content').innerHTML = `<p class="qa-note">${alertEsc(error.message)}</p>`; }
+};
+window.closeQuickAlert = () => { const panel=$('quick-alert-panel'); panel?.classList.remove('is-open'); panel?.setAttribute('aria-hidden','true'); document.querySelector('.hn-profile-wrap')?.classList.remove('qa-active'); };
+function quickAlertAvatar(person) {
+  return `<span class="qa-avatar" style="background:${alertEsc(person.avatarColor || '#555')}">${person.avatarUrl ? `<img src="${alertEsc(person.avatarUrl)}" alt="">` : alertEsc(person.avatar || person.displayName?.[0] || '?')}</span>`;
+}
+function renderQuickAlert() {
+  const content = $('qa-content'); if (!content) return;
+  if (quickAlertMode === 'form') {
+    content.innerHTML = `<form class="qa-form" onsubmit="saveAlertPerson(event)"><label>Name<input id="qa-name" required maxlength="40" autocomplete="name" placeholder="e.g. Mom"></label><label>Phone number<input id="qa-phone" required type="tel" autocomplete="tel" placeholder="+91 XXXXX XXXXX"></label><p class="qa-note">Include country code. Indian 10-digit numbers use +91.</p><div class="qa-actions"><button type="button" class="qa-secondary" onclick="cancelAlertForm(event)">Cancel</button><button class="qa-primary" type="submit">Add Person</button></div><div id="qa-form-error" class="qa-error" role="status"></div></form>`;
+    return;
+  }
+  const cards = quickAlertContacts.map(person => `<div class="qa-person">${quickAlertAvatar(person)}<span class="qa-person-info"><strong>${alertEsc(person.name || person.displayName)}</strong><small>${alertEsc(maskAlertPhone(person.phoneNumber))}</small></span><button type="button" class="qa-icon qa-delete" aria-label="Remove ${alertEsc(person.name || person.displayName)}" title="Remove contact" onclick="deleteAlertPerson(event,'${alertEsc(person.id)}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M5.5 7l1 13h11l1-13M9 7V4h6v3"/></svg></button></div>`).join('');
+  content.innerHTML = `${quickAlertContacts.length ? `<div class="qa-list-label">Saved people <button type="button" class="qa-add" onclick="showAlertForm(event)">+ Add</button></div><div class="qa-list">${cards}</div><button type="button" class="qa-primary qa-send" onclick="sendQuickAlert()">Send Alert</button><p class="qa-note" id="qa-delivery-note">Send a quick alert to your saved people.</p>` : `<div class="qa-empty"><button type="button" class="qa-plus" onclick="showAlertForm(event)">+</button><p>No people added yet</p><button type="button" class="qa-primary" onclick="showAlertForm(event)">Add Person</button></div>`}`;
+}
+function maskAlertPhone(phone) { const digits=String(phone||'').replace(/\D/g,''); return digits.length < 4 ? '••••' : `+${digits.slice(0,2)} ••••• ${digits.slice(-4)}`; }
+window.showAlertForm = event => { event?.stopPropagation(); quickAlertMode='form'; renderQuickAlert(); };
+window.cancelAlertForm = event => { event?.stopPropagation(); quickAlertMode='list'; renderQuickAlert(); };
+window.saveAlertPerson = async event => {
+  event.preventDefault(); const error=$('qa-form-error'); error.textContent='';
+  try {
+    await api('POST','/alerts/contacts',{name:$('qa-name').value,phoneNumber:$('qa-phone').value});
+    const result=await api('GET','/alerts/contacts'); quickAlertContacts=result.contacts||[]; quickAlertMode='list'; renderQuickAlert();
+  } catch (ex) { error.textContent=ex.message; }
+};
+window.deleteAlertPerson = async (event,id) => { event.stopPropagation(); const person=quickAlertContacts.find(item=>item.id===id); if (!person || !confirm(`Remove ${person.displayName} from your alert contacts?`)) return; try { await api('DELETE',`/alerts/contacts/${encodeURIComponent(id)}`); quickAlertContacts=quickAlertContacts.filter(item=>item.id!==id); renderQuickAlert(); } catch(ex) { toast(ex.message); } };
+window.sendQuickAlert = async () => {
+  if(!quickAlertContacts.length){toast('Add someone to your saved people first');return;}
+  const message='Hey! im on our website and i m looking for you';
+  const contactIds=quickAlertContacts.map(person=>person.id);
+  const whatsappTab=window.open('about:blank','_blank'); if(whatsappTab) whatsappTab.opener=null;
+  const button=document.querySelector('.qa-send'); if(button) button.disabled=true;
+  try {
+    await api('POST','/alerts/send',{contactIds});
+    whatsappTab?.close();
+    const note=$('qa-delivery-note'); if(note) note.textContent='Alert sent to your saved people.'; else toast('Alert sent');
+  }
+  catch(error) {
+    if(error.message.includes('Messaging is not configured yet')) {
+      const destinations=quickAlertContacts.map(person=>({name:person.name || person.displayName,url:`https://wa.me/${String(person.phoneNumber||'').replace(/\D/g,'')}?text=${encodeURIComponent(message)}`}));
+      if(whatsappTab) whatsappTab.location.replace(destinations[0].url);
+      const note=$('qa-delivery-note');
+      if(note) note.innerHTML=`No messaging provider is connected. WhatsApp opened for ${alertEsc(destinations[0].name)}; press Send there. ${destinations.length>1 ? `Open the other chats:<span class="qa-delivery-links">${destinations.slice(1).map(item=>`<a href="${item.url}" target="_blank" rel="noopener noreferrer">${alertEsc(item.name)}</a>`).join('')}</span>` : ''}`;
+      if(!whatsappTab && note) note.innerHTML=`<a href="${destinations[0].url}" target="_blank" rel="noopener noreferrer">Open WhatsApp for ${alertEsc(destinations[0].name)}</a>. Press Send there.${destinations.length>1 ? `<span class="qa-delivery-links">${destinations.slice(1).map(item=>`<a href="${item.url}" target="_blank" rel="noopener noreferrer">${alertEsc(item.name)}</a>`).join('')}</span>` : ''}`;
+    } else {
+      whatsappTab?.close(); const note=$('qa-delivery-note'); if(note) note.textContent=error.message; else toast(error.message);
+    }
+  }
+  finally { if(button) button.disabled=false; }
+};
+window.toggleProfileMenu = event => {
+  event?.stopPropagation();
+  const wrap = document.querySelector('.hn-profile-wrap');
+  const button = document.querySelector('.hn-prof');
+  if (!wrap || !button) return;
+  const open = !wrap.classList.contains('is-open');
+  wrap.classList.toggle('is-open', open);
+  button.setAttribute('aria-expanded', String(open));
+};
+document.addEventListener('click', event => {
+  if (!event.target.closest('#quick-alert-panel') && !event.target.closest('.profile-edit-icon')) closeQuickAlert();
+  if (!event.target.closest('.hn-profile-wrap')) closeProfileMenu();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') { closeQuickAlert(); closeProfileMenu(); }
+});
 function setScreen(n) {
   ['auth','home','room'].forEach(s => {
     const el=$('s-'+s);
@@ -945,7 +1116,7 @@ window.doRegister = async () => {
   if(p.length<6){e.textContent='Password 6+ chars';return;}
   try{const{token,user}=await api('POST','/auth/register',{username:u,displayName:n,password:p});persist(user,token);goHome();}catch(ex){e.textContent=ex.message;}
 };
-window.signOut = () => { endCall(); stopAllTimers(); clearRoomSession(); if(S.socket){S.socket.disconnect();S.socket=null;} S.room=null; S.library={items:[],usage:null}; $$('.overlay').forEach(o=>o.classList.add('hidden')); clearSession(); goAuth(); };
+window.signOut = () => { if(S.token)api('POST','/auth/logout',{}).catch(()=>{});closeProfileSwitcher();endCall(); stopAllTimers(); clearRoomSession(); if(S.socket){S.socket.disconnect();S.socket=null;} S.room=null; S.library={items:[],usage:null}; $$('.overlay').forEach(o=>o.classList.add('hidden')); clearSession(); goAuth(); };
 
 // ── Modals ────────────────────────────────────────────────────────────────────
 window.openCreateModal  = () => { $('c-name').value='';$('c-pw').value='';$('c-err').textContent='';$('c-priv').checked=false;$('c-pw-w').classList.add('hidden');$('m-create').classList.remove('hidden');setTimeout(()=>$('c-name').focus(),50); };
@@ -953,9 +1124,92 @@ window.openJoinModal    = () => { $('j-err').textContent='';$('j-pw-w').classLis
 window.openVideoModal   = () => { $('v-url').value='';$('v-err').textContent='';$('sel-prev').classList.add('hidden');$('v-load-btn').disabled=true;S.vid={url:null,title:'',meta:'',type:'embed'};$('m-video').classList.remove('hidden'); };
 window.openLibraryModal = () => { $('m-library').classList.remove('hidden'); loadLibrary(true); };
 window.openInvitePanel  = () => { setSidebar(true); sbTab('room'); revealPlayerUi(true); };
-window.openProfileModal = () => { if(!S.user)return;$('pf-nm').value=S.user.displayName||'';$('pf-bio').value=S.user.bio||'';$('pf-pw').value='';$('pf-err').textContent='';S.pendingClr=null;S.pendingAvFile=null;renderProfAv($('prof-av'),S.user);$('m-prof').classList.remove('hidden'); };
+const PROFILE_AVATARS = [
+  {key:'classic-01',emoji:'😀',color:'#62bb75',group:'classic'},{key:'classic-02',emoji:'😎',color:'#3686c8',group:'classic'},
+  {key:'classic-03',emoji:'🤩',color:'#dc7e32',group:'classic'},{key:'classic-04',emoji:'😺',color:'#b2509a',group:'classic'},
+  {key:'classic-05',emoji:'🦊',color:'#e87936',group:'classic'},{key:'classic-06',emoji:'🐼',color:'#5987a0',group:'classic'},
+  {key:'classic-07',emoji:'🦁',color:'#d6a53a',group:'classic'},{key:'classic-08',emoji:'🐯',color:'#ed7040',group:'classic'},
+  {key:'classic-09',emoji:'🦄',color:'#9d66c7',group:'classic'},{key:'classic-10',emoji:'🐻',color:'#98654b',group:'classic'},
+  {key:'classic-11',emoji:'🐸',color:'#4ba77e',group:'classic'},{key:'classic-12',emoji:'🐨',color:'#778b9a',group:'classic'},
+  ...Array.from({length:14},(_,index)=>({key:`show-${String(index+1).padStart(2,'0')}`,emoji:'',src:`/images/profile-avatars/show-${String(index+1).padStart(2,'0')}.png`,color:['#ed7600','#79ca50','#05778e','#1761c5','#bd6e00','#176b39','#398acb','#7211a6','#c51748','#e45b38','#d83b91','#6512a4','#bb1242','#097aa1'][index],group:'shows'})),
+];
+const profileFlowState={view:'choose',profiles:[],activeId:null,targetId:null,draftName:'',avatarGroup:'classic',avatarKey:'classic-01',pin:'',sessions:[]};
+const profileAvatar = profile => { const avatar=PROFILE_AVATARS.find(item=>item.key===profile.avatarKey)||PROFILE_AVATARS[0],src=profile.avatarUrl||avatar.src; return `<span class="pf-avatar" style="--av-color:${alertEsc(profile.avatarColor||avatar.color)}">${src?`<img src="${alertEsc(src)}" alt="">`:alertEsc(profile.avatarEmoji||avatar.emoji)}</span>`; };
+const profileEscape = value => alertEsc(value);
+window.openProfileSwitcher = async event => {
+  event?.stopPropagation?.();
+  closeProfileMenu(); closeQuickAlert();
+  $('profile-flow').classList.add('is-open'); $('profile-flow').setAttribute('aria-hidden','false');
+  document.body.classList.add('profile-flow-open');
+  try { const result=await api('GET','/profiles'); profileFlowState.profiles=result.profiles||[]; profileFlowState.activeId=result.activeProfileId||S.user?.profileId||null; profileFlowState.view='choose'; renderProfileFlow(); }
+  catch(error) { $('pf-flow-content').innerHTML=`<div class="pf-view"><h1 class="pf-title">Profiles unavailable</h1><p class="pf-subtitle">${profileEscape(error.message)}</p></div>`; }
+};
+window.closeProfileSwitcher = () => { $('profile-flow')?.classList.remove('is-open'); $('profile-flow')?.setAttribute('aria-hidden','true'); document.body.classList.remove('profile-flow-open'); };
+function profileTile(profile,add=false){
+  if(add)return `<button class="pf-profile-tile pf-add-tile" onclick="beginCreateProfile()"><span class="pf-avatar pf-add-avatar" aria-hidden="true"></span><span class="pf-profile-name">Add profile</span></button>`;
+  return `<button class="pf-profile-tile" onclick="chooseProfile('${profileEscape(profile.id)}')">${profileAvatar(profile)}<span class="pf-profile-name">${profile.locked?'<span class="pf-lock-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="10" width="15" height="11" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>':''}${profileEscape(profile.name)}</span></button>`;
+}
+function profileStepDots(active){return `<div class="pf-step-dots">${[1,2,3,4,5].map((step,index)=>`<span class="${index+1===active?'active':''}"></span>`).join('')}</div>`;}
+function renderProfileFlow(){
+  const root=$('pf-flow-content'),state=profileFlowState,profile=state.profiles.find(item=>item.id===state.targetId);
+  if(!root)return;
+  if(state.view==='choose'){
+    root.innerHTML=`<section class="pf-view pf-chooser-view"><h1 class="pf-title">Who's watching?</h1><div class="pf-profile-grid">${state.profiles.map(item=>profileTile(item)).join('')}${state.profiles.length<10?profileTile(null,true):''}</div><div class="pf-actions"><button class="pf-button" onclick="openProfileManage()">Manage profiles</button><button class="pf-button" onclick="openProfileSettings()">Settings</button></div></section>`;return;
+  }
+  if(state.view==='pin'){
+    root.innerHTML=`<section class="pf-view"><div class="pf-centered-avatar">${profileAvatar(profile)}</div><h1 class="pf-title">Verify your PIN</h1><p class="pf-subtitle">For security, enter the PIN for ${profileEscape(profile.name)}.</p><form onsubmit="unlockProfile(event)"><div class="pf-pin-row"><input class="pf-pin-cell" id="pf-enter-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" autocomplete="one-time-code" autofocus></div><p class="pf-form-error" id="pf-error"></p><button class="pf-button" type="button" onclick="renderProfileHome()">Cancel</button><button class="pf-button primary" type="submit">Continue</button></form></section>`;setTimeout(()=>$('pf-enter-pin')?.focus(),30);return;
+  }
+  if(state.view==='name'){
+    root.innerHTML=`<section class="pf-view">${profileStepDots(1)}<h1 class="pf-title">Create your profile</h1><p class="pf-subtitle">Give it a name — this is who's watching.</p><form onsubmit="continueProfileName(event)"><label class="pf-field"><span>Profile name</span><input class="pf-input" id="pf-new-name" maxlength="24" placeholder="Profile name" required></label><p class="pf-form-error" id="pf-error"></p><div class="pf-actions"><button class="pf-button" type="button" onclick="renderProfileHome()">Cancel</button><button class="pf-button primary" type="submit">Continue</button></div></form></section>`;setTimeout(()=>$('pf-new-name')?.focus(),30);return;
+  }
+  if(state.view==='avatar'){
+    const chosen=PROFILE_AVATARS.find(item=>item.key===state.avatarKey)||PROFILE_AVATARS[0];
+    const choices=PROFILE_AVATARS.filter(item=>item.group===state.avatarGroup);
+    root.innerHTML=`<section class="pf-view"><div class="pf-tag">${profileAvatar({avatarKey:state.avatarKey,avatarColor:chosen.color})}<span>${profileEscape(state.draftName)}</span></div>${profileStepDots(2)}<h1 class="pf-title">Choose your look</h1><p class="pf-subtitle">Pick an avatar that feels like this profile.</p><div class="pf-avatar-picker"><div class="pf-category"><button class="${state.avatarGroup==='classic'?'active':''}" onclick="setProfileAvatarGroup('classic')">CLASSICS</button><button class="${state.avatarGroup==='shows'?'active':''}" onclick="setProfileAvatarGroup('shows')">FROM SHOWS &amp; MOVIES</button></div><div class="pf-avatar-grid">${choices.map(item=>`<button type="button" class="pf-avatar-choice ${state.avatarKey===item.key?'selected':''}" style="--av-color:${item.color}" aria-label="Choose avatar ${item.key}" onclick="selectProfileAvatar('${item.key}')">${item.src?`<img src="${item.src}" alt="">`:item.emoji}</button>`).join('')}</div></div><div class="pf-actions"><button class="pf-button" onclick="profileFlowState.view='name';renderProfileFlow()">Back</button><button class="pf-button primary" onclick="continueProfileAvatar()">Continue</button></div></section>`;return;
+  }
+  if(state.view==='pin-new'){
+    root.innerHTML=`<section class="pf-view">${profileStepDots(3)}<h1 class="pf-title">Lock it with a PIN?</h1><p class="pf-subtitle">Only someone with this 4-digit PIN can use the profile. Leave it empty to skip — you can add one later.</p><form onsubmit="finishCreateProfile(event)"><div class="pf-pin-row"><input class="pf-pin-cell" id="pf-new-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="· · · ·"></div><p class="pf-form-error" id="pf-error"></p><div class="pf-actions"><button class="pf-button" type="button" onclick="profileFlowState.view='avatar';renderProfileFlow()">Back</button><button class="pf-button primary" type="submit">Create profile</button></div></form></section>`;return;
+  }
+  if(state.view==='manage'){
+    root.innerHTML=`<section class="pf-view pf-manage-view"><h1 class="pf-title">Who's watching?</h1><div class="pf-manage-grid">${state.profiles.map(item=>`<button class="pf-profile-tile pf-manage-tile" aria-label="Edit ${profileEscape(item.name)} profile" onclick="editProfile('${profileEscape(item.id)}')">${profileAvatar(item)}<span class="pf-manage-avatar-shade" aria-hidden="true"></span><span class="pf-manage-edit-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m14 5 5 5M4 20l4.5-1 11-11a2.1 2.1 0 0 0-3-3l-11 11L4 20Z"/></svg></span><span class="pf-profile-name">${item.locked?'<span class="pf-lock-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="10" width="15" height="11" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>':''}${profileEscape(item.name)}</span></button>`).join('')}</div><div class="pf-actions"><button class="pf-button pf-manage-done" onclick="renderProfileHome()">Done</button><button class="pf-button pf-manage-settings" onclick="openProfileSettings()">Settings</button></div></section>`;return;
+  }
+  if(state.view==='edit'){
+    const avatar=PROFILE_AVATARS.find(item=>item.key===profile?.avatarKey)||PROFILE_AVATARS[0];
+    root.innerHTML=`<section class="pf-view"><h1 class="pf-title">Edit profile</h1><p class="pf-subtitle">Manage the name, avatar, and profile PIN.</p><div class="pf-panel"><div class="pf-panel-card"><div class="pf-row">${profileAvatar(profile)}<div class="pf-row-copy"><strong>Profile name</strong><input class="pf-input" id="pf-edit-name" maxlength="24" value="${profileEscape(profile?.name||'')}"></div></div><div class="pf-row"><div class="pf-avatar-grid">${PROFILE_AVATARS.map(item=>`<button type="button" class="pf-avatar-choice ${profile?.avatarKey===item.key?'selected':''}" style="--av-color:${item.color};width:54px" aria-label="Choose ${item.key}" onclick="selectEditAvatar('${item.key}')">${item.src?`<img src="${item.src}" alt="">`:item.emoji}</button>`).join('')}</div></div><div class="pf-row"><div class="pf-row-copy"><strong>Profile PIN</strong><small>Require a 4-digit PIN to open this profile.</small></div><input class="pf-toggle" id="pf-lock-toggle" type="checkbox" ${profile?.locked?'checked':''} onchange="toggleProfilePinField()"></div><div class="pf-pin-set ${profile?.locked?'':'hidden'}" id="pf-pin-set"><input class="pf-input" id="pf-edit-pin" inputmode="numeric" maxlength="4" placeholder="${profile?.locked?'New 4-digit PIN':'Create 4-digit PIN'}"><button class="pf-button" onclick="saveProfilePin('${profileEscape(profile?.id||'')}')">Save PIN</button><button class="pf-button" onclick="removeProfilePin('${profileEscape(profile?.id||'')}')">Remove PIN</button></div></div></div><p class="pf-form-error" id="pf-error"></p><div class="pf-actions"><button class="pf-button" onclick="openProfileManage()">Back</button><button class="pf-button primary" onclick="saveEditedProfile('${profileEscape(profile?.id||'')}','${avatar.color}')">Save</button></div></section>`;return;
+  }
+  if(state.view==='settings'){
+    root.innerHTML=`<section class="pf-view pf-settings-view"><h1 class="pf-title">Settings</h1><div class="pf-settings-block"><h2>Account security</h2><div class="pf-panel-card"><div class="pf-row"><div class="pf-row-copy"><strong>Change password</strong><small>Update the password for this account.</small></div><button class="pf-icon-button" onclick="togglePasswordForm()"><svg viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-4 4v3m-3 0h14v11H5z"/></svg></button></div><form id="pf-password-form" class="hidden" onsubmit="changeAccountPassword(event)"><label class="pf-field"><span>Current password</span><input class="pf-input" id="pf-current-password" type="password" required></label><label class="pf-field"><span>New password</span><input class="pf-input" id="pf-new-password" type="password" minlength="6" required></label><p class="pf-form-error" id="pf-password-error"></p><button class="pf-button primary" type="submit">Update password</button></form></div></div><div class="pf-settings-block"><h2>Devices</h2><p>Sessions signed in to your account</p><div class="pf-panel-card" id="pf-sessions">Loading sessions…</div></div><div class="pf-actions"><button class="pf-button" onclick="renderProfileHome()">Back</button></div></section>`;
+    loadProfileSessions();return;
+  }
+}
+window.renderProfileHome=()=>{profileFlowState.view='choose';renderProfileFlow();};
+window.beginCreateProfile=()=>{profileFlowState.draftName='';profileFlowState.avatarKey='classic-01';profileFlowState.avatarGroup='classic';profileFlowState.view='name';renderProfileFlow();};
+window.continueProfileName=event=>{event.preventDefault();profileFlowState.draftName=$('pf-new-name').value.trim();if(!profileFlowState.draftName)return;profileFlowState.view='avatar';renderProfileFlow();};
+window.setProfileAvatarGroup=group=>{profileFlowState.avatarGroup=group;renderProfileFlow();};
+window.selectProfileAvatar=key=>{profileFlowState.avatarKey=key;renderProfileFlow();};
+window.continueProfileAvatar=()=>{profileFlowState.view='pin-new';renderProfileFlow();};
+window.finishCreateProfile=async event=>{event.preventDefault();const avatar=PROFILE_AVATARS.find(item=>item.key===profileFlowState.avatarKey)||PROFILE_AVATARS[0],pin=$('pf-new-pin').value;try{const result=await api('POST','/profiles',{name:profileFlowState.draftName,avatarKey:avatar.key,avatarColor:avatar.color,avatarEmoji:avatar.emoji,pin});profileFlowState.profiles.push(result.profile);renderProfileHome();}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}};
+window.chooseProfile=profileId=>{const target=profileFlowState.profiles.find(item=>item.id===profileId);if(!target)return;profileFlowState.targetId=profileId;if(target.locked){profileFlowState.view='pin';renderProfileFlow();return;}activateProfile(profileId,'');};
+window.unlockProfile=async event=>{event.preventDefault();await activateProfile(profileFlowState.targetId,$('pf-enter-pin').value);};
+async function activateProfile(profileId,pin){try{const result=await api('POST',`/profiles/${encodeURIComponent(profileId)}/activate`,{pin});persist(result.user,result.token);profileFlowState.activeId=profileId;profileFlowState.view='choose';closeProfileSwitcher();goHome();if(S.socket){S.socket.disconnect();S.socket=null;}toast(`Switched to ${result.user.displayName}`);}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}}
+window.openProfileManage=()=>{profileFlowState.view='manage';renderProfileFlow();};
+window.editProfile=id=>{profileFlowState.targetId=id;profileFlowState.avatarKey=profileFlowState.profiles.find(item=>item.id===id)?.avatarKey||'classic-01';profileFlowState.view='edit';renderProfileFlow();};
+window.saveEditedProfile=async(id)=>{const avatar=PROFILE_AVATARS.find(item=>item.key===profileFlowState.avatarKey)||PROFILE_AVATARS.find(item=>item.key===profileFlowState.profiles.find(p=>p.id===id)?.avatarKey)||PROFILE_AVATARS[0];try{const result=await api('PATCH',`/profiles/${encodeURIComponent(id)}`,{name:$('pf-edit-name').value,avatarKey:profileFlowState.avatarKey||avatar.key,avatarColor:avatar.color,avatarEmoji:avatar.emoji});profileFlowState.profiles=profileFlowState.profiles.map(item=>item.id===id?result.profile:item);if(id===profileFlowState.activeId){const activated=await api('POST',`/profiles/${encodeURIComponent(id)}/activate`,{});persist(activated.user,activated.token);goHome();}openProfileManage();}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}};
+window.selectEditAvatar=key=>{profileFlowState.avatarKey=key;renderProfileFlow();};
+window.toggleProfilePinField=()=>{const checked=$('pf-lock-toggle').checked;$('pf-pin-set').classList.toggle('hidden',!checked);if(!checked)removeProfilePin(profileFlowState.targetId);};
+window.saveProfilePin=async id=>{const pin=$('pf-edit-pin').value;try{const result=await api('PATCH',`/profiles/${encodeURIComponent(id)}`,{pin});profileFlowState.profiles=profileFlowState.profiles.map(item=>item.id===id?result.profile:item);openProfileManage();}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}};
+window.removeProfilePin=async id=>{try{const result=await api('PATCH',`/profiles/${encodeURIComponent(id)}`,{pin:''});profileFlowState.profiles=profileFlowState.profiles.map(item=>item.id===id?result.profile:item);if(profileFlowState.view==='edit')renderProfileFlow();}catch(error){toast(error.message);}};
+window.removeProfile=async id=>{const profile=profileFlowState.profiles.find(item=>item.id===id);if(!profile||!confirm(`Delete the ${profile.name} profile?`))return;try{const result=await api('DELETE',`/profiles/${encodeURIComponent(id)}`);profileFlowState.profiles=result.profiles;profileFlowState.activeId=result.activeProfileId;if(result.token){persist(result.user,result.token);goHome();}openProfileManage();}catch(error){toast(error.message);}};
+window.openProfileSettings=()=>{profileFlowState.view='settings';renderProfileFlow();};
+window.togglePasswordForm=()=>$('pf-password-form').classList.toggle('hidden');
+window.changeAccountPassword=async event=>{event.preventDefault();const error=$('pf-password-error');error.textContent='';try{await api('POST','/account/password',{currentPassword:$('pf-current-password').value,newPassword:$('pf-new-password').value});$('pf-password-form').reset();error.textContent='Password updated. Other signed-in devices were signed out.';await loadProfileSessions();}catch(ex){error.textContent=ex.message;}};
+async function loadProfileSessions(){const root=$('pf-sessions');if(!root)return;try{const result=await api('GET','/account/sessions');profileFlowState.sessions=result.sessions||[];root.innerHTML=profileFlowState.sessions.length?profileFlowState.sessions.map(session=>`<div class="pf-row"><span class="pf-icon-button"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg></span><div class="pf-row-copy"><strong>${profileEscape(deviceLabel(session.userAgent))}${session.current?' · This device':''}</strong><small class="pf-session-meta">Last active ${new Date(session.lastActive).toLocaleString()}</small></div><button class="pf-icon-button" title="Sign out this device" onclick="revokeProfileSession('${profileEscape(session.id)}',${session.current})"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>`).join(''):'<p class="pf-row-copy">No active sessions found.</p>';}catch(error){root.textContent=error.message;}}
+function deviceLabel(agent){if(/Windows/i.test(agent))return 'Browser · Windows';if(/Mac OS|Macintosh/i.test(agent))return 'Browser · Mac';if(/Android/i.test(agent))return 'Browser · Android';if(/iPhone|iPad/i.test(agent))return 'Browser · iOS';return 'Browser · Device';}
+window.revokeProfileSession=async(id,current)=>{try{await api('DELETE',`/account/sessions/${encodeURIComponent(id)}`);if(current){closeProfileSwitcher();signOut();return;}await loadProfileSessions();}catch(error){toast(error.message);}};
+window.openProfileModal = () => { if(!S.user)return;closeQuickAlert();closeProfileMenu();$('pf-nm').value=S.user.displayName||'';$('pf-bio').value=S.user.bio||'';$('pf-pw').value='';$('pf-err').textContent='';S.pendingClr=null;S.pendingAvFile=null;renderProfAv($('prof-av'),S.user);$('m-prof').classList.remove('hidden'); };
 window.closeModal = id => {
   $(id).classList.add('hidden');
+  if (id === 'm-library' && $('s-home')?.classList.contains('active')) openHomeTab('home');
   if (id === 'm-chat-settings') schedulePlayerUiHide();
 };
 
@@ -1548,7 +1802,8 @@ async function loadCompatibleVideo(video, mediaId) {
   const resumeAt = Number(video.currentTime) || 0;
   const shouldPlay = !video.paused;
   setPlayerConnecting(true, 'Preparing video…', 'Converting this format for browser playback');
-  for (let attempt = 0; attempt < 120; attempt += 1) {
+  for (let attempt = 0; attempt < 900; attempt += 1) {
+    if (S._nativeVid !== video) return;
     try {
       const result = await api('POST', '/library/' + encodeURIComponent(mediaId) + '/compatible');
       if (result.status === 'ready' && result.url) {

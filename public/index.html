@@ -58,15 +58,43 @@
 <!-- ▌HOME ▌-->
 <div id="s-home" class="screen hidden">
   <nav class="hn">
-    <div class="hn-brand"><svg viewBox="0 0 30 30" width="24" height="24"><circle cx="15" cy="15" r="14" fill="#e50914"/><path d="M11 8l14 7-14 7V8Z" fill="white"/></svg><span>MAEVE<em>'</em>MOM</span></div>
+    <button class="hn-brand" type="button" onclick="openHomeTab('home')" aria-label="Maeve'mom home"><span class="brand-m" aria-hidden="true">M</span><span class="brand-word">MAEVE<em>'</em>MOM</span></button>
+    <div class="hn-tabs" role="navigation" aria-label="Primary navigation">
+      <button class="hn-tab active" type="button" data-home-tab="home" onclick="openHomeTab('home')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.1 3.2a1.5 1.5 0 0 1 1.8 0l7.4 6a1.5 1.5 0 0 1 .5 1.1V19a2 2 0 0 1-2 2h-3.6a.9.9 0 0 1-.9-.9v-4.4a1.1 1.1 0 0 0-1.1-1.1h-2.6a1.1 1.1 0 0 0-1.1 1.1v4.4a.9.9 0 0 1-.9.9H5.2a2 2 0 0 1-2-2v-8.7a1.5 1.5 0 0 1 .5-1.1z"/></svg><span>Home</span></button>
+      <button class="hn-tab" type="button" data-home-tab="party" onclick="openHomeTab('party')"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 12h18M3 7.5h4M3 16.5h4M17 7.5h4M17 16.5h4"/></svg><span>Watch Party</span></button>
+      <button class="hn-tab" type="button" data-home-tab="library" onclick="openHomeTab('library')"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3.5" width="19" height="13" rx="2"/><path d="M8 21h8M12 16.5V21"/></svg><span>Library</span></button>
+      <button class="hn-tab" type="button" data-home-tab="reward" onclick="openHomeTab('reward')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2.6 2.95 5.98 6.6.96-4.78 4.65 1.13 6.57L12 17.67l-5.9 3.1 1.13-6.57L2.45 9.54l6.6-.96z"/></svg><span>Reward</span></button>
+    </div>
     <div class="hn-r">
       <button class="hn-lib" onclick="openLibraryModal()" title="My saved media"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><span>Library</span></button>
-      <button class="hn-prof" onclick="openProfileModal()"><div class="hn-av" id="hn-av"></div><span id="hn-nm"></span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
-      <button class="hn-out" onclick="signOut()" title="Sign out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
+      <span class="hn-search-mark" aria-label="Search unavailable"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></span>
+      <div class="hn-profile-wrap">
+        <button class="hn-prof" onclick="toggleProfileMenu(event)" aria-label="Open profile menu" aria-expanded="false"><div class="hn-av" id="hn-av"></div><span id="hn-nm"></span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg></button>
+        <div class="hn-profile-card" role="dialog" aria-label="Profile shortcuts">
+          <div class="hn-profile-summary"><div class="hn-pop-av" id="hn-pop-av"></div><div><strong id="hn-pop-name"></strong><span id="hn-pop-handle"></span></div><button class="profile-edit-icon" type="button" onclick="toggleQuickAlert(event)" aria-label="Quick Alert" title="Quick Alert"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></button></div>
+          <div class="hn-profile-links">
+            <!-- History has no backing feature yet; use this slot for profile editing. -->
+            <button onclick="openProfileModal()"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Edit profile</button>
+            <div class="hn-row is-static"><svg viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Watchlist</div>
+            <button onclick="openHomeTab('party')"><svg viewBox="0 0 24 24"><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01M22 8h.01M15 2h.01M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11-.11.7-.72 1.22-1.43 1.22H17"/><path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2z"/></svg>Watch Party</button>
+          </div>
+          <div class="hn-profile-links">
+            <!-- visual only: there is no ads setting, so this switch is a static display -->
+            <div class="hn-row is-static"><svg viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>Show ads<span class="hn-switch" aria-hidden="true"></span></div>
+          </div>
+          <div class="hn-profile-links hn-profile-account">
+            <button onclick="openProfileSwitcher(event)"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg>Switch profile</button>
+            <div class="hn-row is-static"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></svg>Change avatar</div>
+          </div>
+          <div class="hn-profile-links"><button class="hn-profile-logout" onclick="signOut()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>Logout</button></div>
+        </div>
+        <section class="quick-alert-panel" id="quick-alert-panel" aria-label="Quick Alert" aria-hidden="true"><div class="qa-head"><strong id="qa-title">Quick Alert</strong><button type="button" class="qa-close" onclick="closeQuickAlert()" aria-label="Close">&times;</button></div><div id="qa-content"></div></section>
+      </div>
+
     </div>
   </nav>
 
-  <div class="home-hero">
+  <div class="home-hero hidden" aria-hidden="true">
     <div class="hero-bg-strip"></div>
     <div class="hero-content">
       <div class="hero-text">
@@ -160,7 +188,13 @@
       </div>
     </div>
   </div>
-  <div class="home-foot">MAEVE'MOM &nbsp;·&nbsp; Made with ♥ for two</div>
+  <main class="cinema-home">
+    <section class="cinema-hero home-panel" data-panel="home" aria-label="Maeve'mom home"></section>
+    <section class="party-panel home-panel hidden" data-panel="party" aria-labelledby="party-title">
+      <div class="party-panel-inner"><p class="panel-kicker">MAEVE'MOM</p><h1 id="party-title">Watch Party</h1><p>Start a private room or enter one you were invited to.</p><div class="party-actions"><button class="party-create" onclick="openCreateModal()">Create Room</button><button class="party-join" onclick="openJoinModal()">Join Room</button></div></div>
+    </section>
+    <section class="reward-panel home-panel hidden" data-panel="reward" aria-labelledby="reward-title"><div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63L21 9.54l-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.93 1.06-6.2L3 9.54l6.22-.91z"/></svg><h1 id="reward-title">Reward</h1></div></section>
+  </main>
 </div>
 
 <!-- ▌ROOM ▌-->
@@ -650,6 +684,7 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
+<div class="profile-flow" id="profile-flow" aria-hidden="true"><div class="pf-shell"><button class="pf-close" onclick="closeProfileSwitcher()" aria-label="Close profile manager">×</button><div id="pf-flow-content"></div></div></div>
 <div id="efloat" style="position:fixed;inset:0;pointer-events:none;z-index:9998;overflow:hidden"></div>
 <audio id="remote-audio" autoplay playsinline style="display:none"></audio>
 

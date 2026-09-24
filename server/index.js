@@ -31,11 +31,15 @@ const VIDEO_EXTENSIONS = new Set(['.mp4','.m4v','.webm','.mkv','.mov','.avi','.o
 const NATIVE_VIDEO_EXTENSIONS = new Set(['.mp4','.m4v','.webm','.ogv']);
 
 // ── Uploads ────────────────────────────────────────────────────────────────────
-const uploadsDir = path.join(__dirname, '../public/uploads');
+const storageRoot = process.env.STORAGE_DIR || '';
+const uploadsDir = process.env.MEDIA_DIR || (storageRoot ? path.join(storageRoot, 'uploads') : path.join(__dirname, '../public/uploads'));
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-const dataDir = path.join(__dirname, '../data');
+const dataDir = process.env.DATA_DIR || storageRoot || path.join(__dirname, '../data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 const libraryFile = path.join(dataDir, 'libraries.json');
+const alertContactsFile = path.join(dataDir, 'alert-contacts.json');
+const profileFile = path.join(dataDir, 'profiles.json');
+const deviceSessionsFile = path.join(dataDir, 'device-sessions.json');
 
 const mkStore = pfx => multer.diskStorage({
   destination: (_, __, cb) => cb(null, uploadsDir),
@@ -50,6 +54,23 @@ const uploadVideo  = multer({
   }
 });
 const uploadAvatar = multer({ storage: mkStore('av_'), limits:{ fileSize: 8*1024*1024 }, fileFilter:(_,f,cb)=>cb(null,f.mimetype.startsWith('image/')) });
+const uploadChunkDir = path.join(uploadsDir, '.uploading');
+if (!fs.existsSync(uploadChunkDir)) fs.mkdirSync(uploadChunkDir, { recursive:true });
+const uploadSessions = new Map();
+const MAX_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+for (const file of fs.readdirSync(uploadChunkDir)) {
+  const filePath = path.join(uploadChunkDir, file);
+  try { if (file.endsWith('.part')) fs.unlinkSync(filePath); } catch {}
+}
+const uploadCleanupTimer = setInterval(() => {
+  const expiredBefore = Date.now() - 24 * 60 * 60 * 1000;
+  for (const [id, session] of uploadSessions) {
+    if (session.busy || session.updatedAt > expiredBefore) continue;
+    uploadSessions.delete(id);
+    fs.promises.unlink(session.tempPath).catch(() => {});
+  }
+}, 30 * 60 * 1000);
+uploadCleanupTimer.unref?.();
 
 // ── Stores ─────────────────────────────────────────────────────────────────────
 const users    = new Map(); // id → User
@@ -57,6 +78,88 @@ const rooms    = new Map(); // id → Room
 const sessions = new Map(); // socketId → {userId, roomId}
 const uSocks   = new Map(); // userId → Set of socketIds (handles multiple tabs)
 const libraries = new Map(); // userId → saved media playlist
+const alertContacts = new Map(); // userId → private saved alert contacts
+const alertSendTimes = new Map();
+const userProfiles = new Map();
+const deviceSessions = new Map();
+const profilePinFailures = new Map();
+
+function readJsonMap(file) {
+  try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file,'utf8')) : {}; }
+  catch (error) { console.error(`Failed to load ${path.basename(file)}:`,error.message); return {}; }
+}
+function saveProfiles() { fs.writeFileSync(profileFile,JSON.stringify(Object.fromEntries(userProfiles),null,2),'utf8'); }
+function saveDeviceSessions() { fs.writeFileSync(deviceSessionsFile,JSON.stringify(Object.fromEntries(deviceSessions),null,2),'utf8'); }
+function disconnectDeviceSession(sessionId) {
+  deviceSessions.delete(sessionId);
+  for(const socket of io.sockets.sockets.values()) if(socket.userData?.sid===sessionId) socket.disconnect(true);
+}
+const safeProfileColor = value => /^#[0-9a-f]{6}$/i.test(String(value||'')) ? String(value) : '#e50914';
+const safeAvatarKey = value => /^(?:classic-(?:0[1-9]|1[0-2])|show-(?:0[1-9]|1[0-4]))$/.test(String(value||'')) ? String(value) : 'classic-01';
+function ensureUserProfiles(userId) {
+  const user=users.get(userId); if(!user) return [];
+  if(!userProfiles.has(userId) || !userProfiles.get(userId).length) {
+    const restored=readJsonMap(profileFile)[userId];
+    const list=Array.isArray(restored) ? restored : [];
+    if(!list.length) list.push({id:'profile_'+uuidv4().replace(/-/g,'').slice(0,12),name:user.displayName,avatarKey:'classic-01',avatarColor:user.avatarColor,avatarUrl:user.avatarUrl||null,pinHash:null,createdAt:Date.now()});
+    userProfiles.set(userId,list); saveProfiles();
+  }
+  return userProfiles.get(userId);
+}
+function publicProfile(profile) {
+  const avatarKey=safeAvatarKey(profile.avatarKey);
+  return {id:profile.id,name:profile.name,avatarKey,avatarColor:safeProfileColor(profile.avatarColor),avatarUrl:profile.avatarUrl || (avatarKey.startsWith('show-')?`/images/profile-avatars/${avatarKey}.png`:null),locked:!!profile.pinHash,createdAt:profile.createdAt};
+}
+function profileUser(userId,profileId) {
+  const user=users.get(userId); if(!user) return null;
+  const profile=ensureUserProfiles(userId).find(item=>item.id===profileId) || ensureUserProfiles(userId)[0];
+  const emoji=String(profile.avatarEmoji||'');
+  const avatarKey=safeAvatarKey(profile.avatarKey),avatarUrl=profile.avatarUrl || (avatarKey.startsWith('show-')?`/images/profile-avatars/${avatarKey}.png`:user.avatarUrl || null);
+  return {...uPub(user),profileId:profile.id,profileAvatarKey:avatarKey,displayName:profile.name,avatar:emoji.length<=8&&!/[<>&"'`]/.test(emoji)?emoji:user.avatar,avatarColor:safeProfileColor(profile.avatarColor),avatarUrl};
+}
+function createSessionToken(userId,profileId,req,sessionId=null) {
+  const id=sessionId || uuidv4();
+  const existing=deviceSessions.get(id);
+  deviceSessions.set(id,{id,userId,profileId,createdAt:existing?.createdAt || Date.now(),lastActive:Date.now(),userAgent:String(req.headers['user-agent'] || 'Unknown device').slice(0,240)});
+  saveDeviceSessions();
+  return jwt.sign({userId,profileId,sid:id},JWT_SECRET,{expiresIn:'30d'});
+}
+for (const [id,record] of Object.entries(readJsonMap(deviceSessionsFile))) if(record?.userId) deviceSessions.set(id,{...record,id});
+for (const [id,list] of Object.entries(readJsonMap(profileFile))) if(Array.isArray(list)) userProfiles.set(id,list);
+
+function loadAlertContacts() {
+  try {
+    if (!fs.existsSync(alertContactsFile)) return;
+    const raw = JSON.parse(fs.readFileSync(alertContactsFile, 'utf8'));
+    for (const [userId, contacts] of Object.entries(raw || {}))
+      alertContacts.set(userId, Array.isArray(contacts) ? contacts : []);
+  } catch (error) { console.error('Failed to load alert contacts:', error.message); }
+}
+function saveAlertContacts() {
+  const output = Object.fromEntries(alertContacts);
+  fs.writeFileSync(alertContactsFile, JSON.stringify(output, null, 2), 'utf8');
+}
+function getAlertContacts(userId) {
+  if (!alertContacts.has(userId)) alertContacts.set(userId, []);
+  return alertContacts.get(userId);
+}
+function normalizeAlertPhone(value) {
+  const raw = String(value || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (!/^\+?[\d\s().-]+$/.test(raw)) return null;
+  let normalized = digits;
+  if (!raw.startsWith('+') && digits.length === 10) normalized = '91' + digits;
+  if (normalized.length < 8 || normalized.length > 15 || normalized[0] === '0') return null;
+  return '+' + normalized;
+}
+// Messaging adapters plug in here. No provider is configured by default.
+async function sendAlertWithProvider() {
+  if (process.env.WHATSAPP_PROVIDER_URL && process.env.WHATSAPP_PROVIDER_TOKEN)
+    return { configured:false, provider:'whatsapp', error:'WhatsApp adapter is not installed.' };
+  if (process.env.SMS_PROVIDER_URL && process.env.SMS_PROVIDER_TOKEN)
+    return { configured:false, provider:'sms', error:'SMS adapter is not installed.' };
+  return { configured:false, provider:null };
+}
 
 // ── Seed ───────────────────────────────────────────────────────────────────────
 (async () => {
@@ -91,7 +194,14 @@ function loadLibraries() {
 function saveLibraries() {
   const out = {};
   for (const [userId, items] of libraries) out[userId] = items;
-  fs.writeFileSync(libraryFile, JSON.stringify(out, null, 2), 'utf8');
+  const tempFile = libraryFile + '.tmp';
+  try {
+    fs.writeFileSync(tempFile, JSON.stringify(out, null, 2), 'utf8');
+    fs.renameSync(tempFile, libraryFile);
+  } catch (error) {
+    try { fs.unlinkSync(tempFile); } catch {}
+    throw error;
+  }
 }
 function ensureLibrary(userId) {
   if (!libraries.has(userId)) libraries.set(userId, []);
@@ -149,16 +259,22 @@ function findMediaItem(mediaId) {
 function compatiblePath(item) {
   return path.join(uploadsDir, compatibleFilename(item));
 }
+function compatibleTempPath(item) {
+  return path.join(uploadsDir, item.filename + '.converting.mp4');
+}
 function compatibleStatus(item) {
   if (!item) return { status:'missing' };
+  const active = transcodes.get(item.id);
+  if (active && active.status !== 'ready') return active;
   if (fs.existsSync(compatiblePath(item))) return { status:'ready' };
-  return transcodes.get(item.id) || { status:'idle' };
+  return active || { status:'idle' };
 }
 function startCompatibleTranscode(item) {
   const current = compatibleStatus(item);
   if (current.status !== 'idle') return current;
   const source = path.join(uploadsDir, item.filename);
-  const output = compatiblePath(item);
+  const output = compatibleTempPath(item);
+  try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
   if (!fs.existsSync(source)) return { status:'missing' };
 
   const state = { status:'processing' };
@@ -183,7 +299,13 @@ function startCompatibleTranscode(item) {
   });
   child.once('close', code => {
     if (code === 0 && fs.existsSync(output)) {
-      transcodes.set(item.id, { status:'ready' });
+      try {
+        fs.renameSync(output, compatiblePath(item));
+        transcodes.set(item.id, { status:'ready' });
+      } catch (error) {
+        transcodes.set(item.id, { status:'failed', error:'Could not save the converted video. Check server storage.' });
+        try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
+      }
     } else {
       transcodes.set(item.id, { status:'failed', error:'FFmpeg could not convert this video.' });
       try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
@@ -244,6 +366,7 @@ function activeRoomMediaForUser(userId) {
   return null;
 }
 loadLibraries();
+loadAlertContacts();
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const uPub = u => ({ id:u.id, username:u.username, displayName:u.displayName,
@@ -320,7 +443,21 @@ function promoteOwner(room) {
 function authMw(req,res,next){
   const tok=req.headers.authorization?.split(' ')[1];
   if(!tok) return res.status(401).json({error:'No token'});
-  try { req.user=jwt.verify(tok,JWT_SECRET); next(); }
+  try {
+    req.user=jwt.verify(tok,JWT_SECRET);
+    if(!req.user.sid) {
+      const profileId=req.user.profileId || ensureUserProfiles(req.user.userId)[0]?.id;
+      const sid=uuidv4(),replacement=createSessionToken(req.user.userId,profileId,req,sid);
+      req.user={...req.user,sid,profileId};
+      res.setHeader('X-Auth-Token',replacement);
+    }
+    if(req.user.sid) {
+      const session=deviceSessions.get(req.user.sid);
+      if(!session || session.userId!==req.user.userId) return res.status(401).json({error:'This session has been signed out'});
+      if(Date.now()-session.lastActive>60000){session.lastActive=Date.now();saveDeviceSessions();}
+    }
+    next();
+  }
   catch { res.status(401).json({error:'Invalid token'}); }
 }
 
@@ -340,8 +477,9 @@ app.post('/api/auth/register', async (req,res) => {
       avatarUrl:null,bio:'Movie lover',
       passwordHash:await bcrypt.hash(password,10),createdAt:Date.now()};
     users.set(id,user);
-    const token=jwt.sign({userId:id},JWT_SECRET,{expiresIn:'30d'});
-    res.json({token,user:uPub(user)});
+    const profile=ensureUserProfiles(id)[0];
+    const token=createSessionToken(id,profile.id,req);
+    res.json({token,user:profileUser(id,profile.id)});
   } catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -352,15 +490,137 @@ app.post('/api/auth/login', async (req,res) => {
     const user=[...users.values()].find(u=>u.username.toLowerCase()===username.toLowerCase());
     if(!user) return res.status(401).json({error:'User not found'});
     if(!await bcrypt.compare(password,user.passwordHash)) return res.status(401).json({error:'Wrong password'});
-    const token=jwt.sign({userId:user.id},JWT_SECRET,{expiresIn:'30d'});
-    res.json({token,user:uPub(user)});
+    const profile=ensureUserProfiles(user.id)[0];
+    const token=createSessionToken(user.id,profile.id,req);
+    res.json({token,user:profileUser(user.id,profile.id)});
   } catch(e){res.status(500).json({error:e.message});}
 });
 
 app.get('/api/auth/me', authMw, (req,res) => {
   const u=users.get(req.user.userId);
   if(!u) return res.status(404).json({error:'Not found'});
-  res.json({user:uPub(u)});
+  res.json({user:profileUser(u.id,req.user.profileId)});
+});
+app.post('/api/auth/logout',authMw,(req,res)=>{
+  if(req.user.sid){disconnectDeviceSession(req.user.sid);saveDeviceSessions();}
+  res.json({ok:true});
+});
+
+app.get('/api/profiles',authMw,(req,res)=>res.json({profiles:ensureUserProfiles(req.user.userId).map(publicProfile),activeProfileId:req.user.profileId || null}));
+app.post('/api/profiles',authMw,async(req,res)=>{
+  const name=String(req.body.name||'').trim().replace(/\s+/g,' ').slice(0,24);
+  const avatarKey=safeAvatarKey(req.body.avatarKey);
+  const pin=String(req.body.pin||'');
+  if(!name) return res.status(400).json({error:'Enter a profile name'});
+  if(pin && !/^\d{4}$/.test(pin)) return res.status(400).json({error:'Profile PIN must be exactly 4 digits'});
+  const profiles=ensureUserProfiles(req.user.userId);
+  if(profiles.length>=10) return res.status(400).json({error:'You can create up to 10 profiles'});
+  const profile={id:'profile_'+uuidv4().replace(/-/g,'').slice(0,12),name,avatarKey,avatarColor:safeProfileColor(req.body.avatarColor),avatarEmoji:String(req.body.avatarEmoji||'').slice(0,8),pinHash:pin ? await bcrypt.hash(pin,10) : null,createdAt:Date.now()};
+  profiles.push(profile); saveProfiles(); res.json({profile:publicProfile(profile)});
+});
+app.post('/api/profiles/:id/activate',authMw,async(req,res)=>{
+  const profile=ensureUserProfiles(req.user.userId).find(item=>item.id===req.params.id);
+  if(!profile) return res.status(404).json({error:'Profile not found'});
+  const attemptKey=`${req.user.userId}:${req.user.sid||'legacy'}:${profile.id}`,attempt=profilePinFailures.get(attemptKey);
+  if(attempt?.lockedUntil>Date.now()) return res.status(429).json({error:'Too many incorrect PIN attempts. Try again in a minute.'});
+  if(profile.pinHash && !await bcrypt.compare(String(req.body.pin||''),profile.pinHash)) {
+    const failures=attempt?.lockedUntil>Date.now()?attempt.failures:attempt?.failures||0;
+    profilePinFailures.set(attemptKey,{failures:failures+1,lockedUntil:failures+1>=5?Date.now()+60000:0});
+    return res.status(401).json({error:'Incorrect PIN'});
+  }
+  profilePinFailures.delete(attemptKey);
+  const token=createSessionToken(req.user.userId,profile.id,req,req.user.sid || null);
+  res.json({token,user:profileUser(req.user.userId,profile.id)});
+});
+app.patch('/api/profiles/:id',authMw,async(req,res)=>{
+  const profile=ensureUserProfiles(req.user.userId).find(item=>item.id===req.params.id);
+  if(!profile) return res.status(404).json({error:'Profile not found'});
+  if(req.body.name!==undefined){const name=String(req.body.name).trim().replace(/\s+/g,' ').slice(0,24);if(!name)return res.status(400).json({error:'Enter a profile name'});profile.name=name;}
+  if(req.body.avatarKey!==undefined) profile.avatarKey=safeAvatarKey(req.body.avatarKey);
+  if(req.body.avatarColor!==undefined && /^#[0-9a-f]{6}$/i.test(String(req.body.avatarColor))) profile.avatarColor=String(req.body.avatarColor);
+  if(req.body.avatarEmoji!==undefined) profile.avatarEmoji=String(req.body.avatarEmoji).slice(0,8);
+  if(req.body.pin!==undefined){const pin=String(req.body.pin);if(pin && !/^\d{4}$/.test(pin))return res.status(400).json({error:'Profile PIN must be exactly 4 digits'});profile.pinHash=pin?await bcrypt.hash(pin,10):null;}
+  saveProfiles(); res.json({profile:publicProfile(profile)});
+});
+app.delete('/api/profiles/:id',authMw,(req,res)=>{
+  const profiles=ensureUserProfiles(req.user.userId);
+  if(profiles.length<=1) return res.status(400).json({error:'Keep at least one profile on this account'});
+  const index=profiles.findIndex(item=>item.id===req.params.id);
+  if(index<0)return res.status(404).json({error:'Profile not found'});
+  profiles.splice(index,1);saveProfiles();
+  const active=profiles.find(item=>item.id===req.user.profileId)||profiles[0];
+  const sessionId=req.user.profileId===req.params.id && req.user.sid ? req.user.sid : null;
+  const token=sessionId?createSessionToken(req.user.userId,active.id,req,sessionId):null;
+  res.json({profiles:profiles.map(publicProfile),activeProfileId:active.id,token,user:profileUser(req.user.userId,active.id)});
+});
+app.post('/api/account/password',authMw,async(req,res)=>{
+  const user=users.get(req.user.userId),current=String(req.body.currentPassword||''),next=String(req.body.newPassword||'');
+  if(!current||!next)return res.status(400).json({error:'Enter your current and new password'});
+  if(next.length<6)return res.status(400).json({error:'New password must be at least 6 characters'});
+  if(!await bcrypt.compare(current,user.passwordHash))return res.status(401).json({error:'Current password is incorrect'});
+  user.passwordHash=await bcrypt.hash(next,10);
+  for(const [id,session] of deviceSessions)if(session.userId===user.id&&id!==req.user.sid)disconnectDeviceSession(id);
+  saveDeviceSessions();res.json({ok:true});
+});
+app.get('/api/account/sessions',authMw,(req,res)=>res.json({sessions:[...deviceSessions.values()].filter(session=>session.userId===req.user.userId).map(session=>({id:session.id,userAgent:session.userAgent,createdAt:session.createdAt,lastActive:session.lastActive,current:session.id===req.user.sid}))}));
+app.delete('/api/account/sessions/:id',authMw,(req,res)=>{
+  const session=deviceSessions.get(req.params.id);
+  if(!session||session.userId!==req.user.userId)return res.status(404).json({error:'Session not found'});
+  disconnectDeviceSession(req.params.id);saveDeviceSessions();res.json({ok:true,current:req.params.id===req.user.sid});
+});
+
+app.get('/api/alerts/contacts', authMw, (req,res) => {
+  const contacts = getAlertContacts(req.user.userId).map(contact => {
+    const recipient = contact.recipientUserId ? users.get(contact.recipientUserId) : null;
+    if (contact.recipientUserId && !recipient) return null;
+    return {...contact, name:contact.name || recipient?.displayName || contact.username || 'Contact',
+      displayName:contact.name || recipient?.displayName || contact.username || 'Contact',
+      username:recipient?.username || null, avatar:recipient?.avatar || (contact.name || 'C')[0].toUpperCase(),
+      avatarColor:recipient?.avatarColor || contact.avatarColor || '#59656a', avatarUrl:recipient?.avatarUrl || null};
+  }).filter(Boolean);
+  res.json({contacts, delivery:{configured:false,provider:null}});
+});
+app.post('/api/alerts/contacts', authMw, (req,res) => {
+  const name = String(req.body.name || '').trim().replace(/\s+/g,' ').slice(0,40);
+  const phoneNumber = normalizeAlertPhone(req.body.phoneNumber);
+  if (!name) return res.status(400).json({error:'Enter a name for this contact'});
+  if (!phoneNumber) return res.status(400).json({error:'Enter a valid phone number with country code'});
+  const contacts = getAlertContacts(req.user.userId);
+  if (contacts.some(item => item.phoneNumber === phoneNumber)) return res.status(409).json({error:'This phone number is already saved'});
+  if (contacts.length >= 50) return res.status(400).json({error:'You can save up to 50 people'});
+  const contact = {id:uuidv4(),name,phoneNumber,addedAt:Date.now()};
+  contacts.push(contact); saveAlertContacts();
+  res.json({contact:{...contact,displayName:name,avatar:name[0].toUpperCase(),avatarColor:'#59656a',avatarUrl:null}});
+});
+app.patch('/api/alerts/contacts/:id', authMw, (req,res) => {
+  const name = String(req.body.name || '').trim().replace(/\s+/g,' ').slice(0,40);
+  const phoneNumber = normalizeAlertPhone(req.body.phoneNumber);
+  if (!name) return res.status(400).json({error:'Enter a name for this contact'});
+  if (!phoneNumber) return res.status(400).json({error:'Enter a valid phone number with country code'});
+  const contacts = getAlertContacts(req.user.userId);
+  if (contacts.some(item => item.phoneNumber === phoneNumber && item.id !== req.params.id)) return res.status(409).json({error:'This phone number is already saved'});
+  const contact = contacts.find(item => item.id === req.params.id);
+  if (!contact) return res.status(404).json({error:'Alert contact not found'});
+  Object.assign(contact,{name,phoneNumber}); delete contact.recipientUserId; delete contact.username; saveAlertContacts();
+  res.json({contact:{...contact,displayName:name,avatar:name[0].toUpperCase(),avatarColor:'#59656a',avatarUrl:null}});
+});
+app.delete('/api/alerts/contacts/:id', authMw, (req,res) => {
+  const contacts = getAlertContacts(req.user.userId), index = contacts.findIndex(item => item.id === req.params.id);
+  if (index < 0) return res.status(404).json({error:'Alert contact not found'});
+  contacts.splice(index,1); saveAlertContacts(); res.json({ok:true});
+});
+app.post('/api/alerts/send', authMw, async (req,res) => {
+  const message = "Hey! im on our website and i m looking for you";
+  const ids = [...new Set(Array.isArray(req.body.contactIds) ? req.body.contactIds.map(String) : [])];
+  if (!ids.length || ids.length > 50) return res.status(400).json({error:'Select between 1 and 50 saved people'});
+  const now = Date.now(), last = alertSendTimes.get(req.user.userId) || 0;
+  if (now - last < 60000) return res.status(429).json({error:'Please wait a minute before sending another alert'});
+  const contacts = getAlertContacts(req.user.userId).filter(item => ids.includes(item.id));
+  if (contacts.length !== ids.length) return res.status(400).json({error:'One or more selected people are unavailable'});
+  alertSendTimes.set(req.user.userId, now);
+  const delivery = await sendAlertWithProvider();
+  if (!delivery.configured) return res.status(503).json({error:'Messaging is not configured yet. Your alert was not sent.',status:'pending',provider:delivery.provider});
+  res.status(503).json({error:'Messaging provider is not available.',status:'pending'});
 });
 
 app.get('/api/library', authMw, (req,res) => {
@@ -378,12 +638,14 @@ app.patch('/api/auth/profile', authMw, uploadAvatar.single('avatar'), async (req
   try {
     const u=users.get(req.user.userId);
     if(!u) return res.status(404).json({error:'Not found'});
-    if(req.body.displayName){u.displayName=req.body.displayName.trim().slice(0,30);u.avatar=u.displayName[0].toUpperCase();}
+    const profiles=ensureUserProfiles(u.id),activeProfile=profiles.find(profile=>profile.id===req.user.profileId)||profiles[0];
+    if(req.body.displayName){const name=req.body.displayName.trim().slice(0,30);if(name){activeProfile.name=name;if(activeProfile.id===profiles[0].id){u.displayName=name;u.avatar=name[0].toUpperCase();}}}
     if(req.body.bio!==undefined) u.bio=String(req.body.bio).slice(0,80);
-    if(req.body.avatarColor) u.avatarColor=req.body.avatarColor;
-    if(req.file) u.avatarUrl='/uploads/'+req.file.filename;
+    if(req.body.avatarColor && /^#[0-9a-f]{6}$/i.test(req.body.avatarColor)){activeProfile.avatarColor=req.body.avatarColor;if(activeProfile.id===profiles[0].id)u.avatarColor=req.body.avatarColor;}
+    if(req.file){activeProfile.avatarUrl='/uploads/'+req.file.filename;if(activeProfile.id===profiles[0].id)u.avatarUrl=activeProfile.avatarUrl;}
     if(req.body.password?.length>=6) u.passwordHash=await bcrypt.hash(req.body.password,10);
-    res.json({user:uPub(u)});
+    saveProfiles();
+    res.json({user:profileUser(u.id,activeProfile.id)});
   } catch(e){res.status(500).json({error:e.message});}
 });
 
@@ -420,6 +682,91 @@ app.get('/api/rooms/:id', authMw, async (req,res) => {
     }
     res.json({room:rPub(room,req.user.userId)});
   } catch(e){res.status(500).json({error:e.message});}
+});
+
+// Large media uses small sequential chunks so a multi-gigabyte file does not
+// depend on one long request surviving every proxy and server timeout.
+app.post('/api/library/upload/start', authMw, (req,res) => {
+  const size = Number(req.body?.size);
+  const originalName = path.basename(String(req.body?.name || 'video').replace(/\\/g, '/')).slice(0, 240);
+  const extension = path.extname(originalName).toLowerCase();
+  if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_UPLOAD_BYTES)
+    return res.status(413).json({ error:`Video size must be between 1 byte and ${Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024 / 1024)} GB.` });
+  if (!VIDEO_EXTENSIONS.has(extension)) return res.status(400).json({ error:'Choose a supported video file.' });
+  const reservedBytes = [...uploadSessions.values()].reduce((sum, item) => sum + item.size, 0);
+  if (totalLibraryBytes() + reservedBytes + size > MEDIA_BUDGET_BYTES)
+    return res.status(413).json({ error:'Server media budget full. Delete old files before uploading more.' });
+  const id = uuidv4();
+  const tempPath = path.join(uploadChunkDir, id + '.part');
+  try {
+    fs.closeSync(fs.openSync(tempPath, 'wx'));
+    const now = Date.now();
+    uploadSessions.set(id, { id, userId:req.user.userId, originalName, extension, size, received:0, tempPath, busy:false, createdAt:now, updatedAt:now });
+    res.json({ uploadId:id, chunkSize:MAX_UPLOAD_CHUNK_BYTES });
+  } catch (error) { res.status(500).json({ error:'Could not start the upload. Check server storage and try again.' }); }
+});
+
+app.put('/api/library/upload/:uploadId/chunk', authMw, express.raw({ type:'application/octet-stream', limit:MAX_UPLOAD_CHUNK_BYTES }), async (req,res) => {
+  const session = uploadSessions.get(req.params.uploadId);
+  if (!session || session.userId !== req.user.userId) return res.status(404).json({ error:'Upload session expired. Start the upload again.' });
+  const offset = Number(req.get('Upload-Offset'));
+  const chunk = req.body;
+  if (session.busy) return res.status(409).json({ error:'A previous chunk is still being saved. Retry shortly.' });
+  if (!Buffer.isBuffer(chunk) || !chunk.length || chunk.length > MAX_UPLOAD_CHUNK_BYTES || offset !== session.received || offset + chunk.length > session.size)
+    return res.status(400).json({ error:'Upload chunk is out of sequence. Retry the upload.' });
+  session.busy = true;
+  try {
+    await fs.promises.appendFile(session.tempPath, chunk);
+    session.received += chunk.length;
+    session.updatedAt = Date.now();
+    res.json({ received:session.received, total:session.size });
+  } catch (error) { res.status(507).json({ error:'Could not save this upload chunk. Check server storage.' }); }
+  finally { session.busy = false; }
+});
+
+app.get('/api/library/upload/:uploadId', authMw, (req,res) => {
+  const session = uploadSessions.get(req.params.uploadId);
+  if (!session || session.userId !== req.user.userId) return res.status(404).json({ error:'Upload session expired. Start the upload again.' });
+  res.json({ received:session.received, total:session.size });
+});
+
+app.post('/api/library/upload/:uploadId/complete', authMw, async (req,res) => {
+  const session = uploadSessions.get(req.params.uploadId);
+  if (!session || session.userId !== req.user.userId) return res.status(404).json({ error:'Upload session expired. Start the upload again.' });
+  if (session.busy || session.received !== session.size) return res.status(409).json({ error:`Upload is incomplete (${session.received} of ${session.size} bytes received).` });
+  const filename = uuidv4() + session.extension;
+  const finalPath = path.join(uploadsDir, filename);
+  try {
+    await fs.promises.rename(session.tempPath, finalPath);
+    const userId = session.userId;
+    const library = ensureLibrary(userId);
+    const entry = { id:uuidv4().slice(0,8), ownerId:userId, filename, originalName:normalizeMediaDisplayName('', session.originalName), url:'', size:session.size, uploadedAt:Date.now(), order:library.length };
+    entry.url = '/api/media/' + entry.id + '/stream';
+    library.push(entry);
+    try { saveLibraries(); }
+    catch (error) {
+      library.pop();
+      await fs.promises.rename(finalPath, session.tempPath).catch(() => {});
+      throw error;
+    }
+    uploadSessions.delete(session.id);
+    refreshRoomsForUser(userId);
+    const roomItems = activeRoomMediaForUser(userId);
+    const needsCompatibility = !NATIVE_VIDEO_EXTENSIONS.has(path.extname(filename).toLowerCase());
+    res.json({ video:pubMediaItem(entry), items:library.slice().sort((a,b)=>a.order-b.order).map(pubMediaItem), usage:budgetSummary(userId), roomItems, compatibility:needsCompatibility?{status:'queued'}:{status:'not-needed'} });
+    if (needsCompatibility) setImmediate(() => startCompatibleTranscode(entry));
+  } catch (error) {
+    console.error('Could not finalize library upload:', error);
+    res.status(500).json({ error:'The video arrived but could not be added to your library. Check server storage and retry Save.' });
+  }
+});
+
+app.delete('/api/library/upload/:uploadId', authMw, async (req,res) => {
+  const session = uploadSessions.get(req.params.uploadId);
+  if (!session || session.userId !== req.user.userId) return res.json({ ok:true });
+  uploadSessions.delete(session.id);
+  try { await fs.promises.unlink(session.tempPath); } catch {}
+  res.json({ ok:true });
 });
 
 app.post('/api/library/upload', authMw, uploadVideo.single('video'), (req,res) => {
@@ -507,6 +854,7 @@ app.delete('/api/library/:mediaId', authMw, (req,res) => {
     if (entry?.filename) {
       try { fs.unlinkSync(path.join(uploadsDir, entry.filename)); } catch {}
       try { fs.unlinkSync(compatiblePath(entry)); } catch {}
+      try { fs.unlinkSync(compatibleTempPath(entry)); } catch {}
     }
     refreshRoomsForUser(userId);
     res.json({
@@ -578,13 +926,17 @@ app.get('*',(_,res)=>res.sendFile(path.join(__dirname,'../public/index.html')));
 io.use((socket,next)=>{
   const tok=socket.handshake.auth.token;
   if(!tok) return next(new Error('No token'));
-  try{socket.userData=jwt.verify(tok,JWT_SECRET);next();}
+  try{
+    socket.userData=jwt.verify(tok,JWT_SECRET);
+    if(socket.userData.sid && deviceSessions.get(socket.userData.sid)?.userId!==socket.userData.userId) return next(new Error('This session has been signed out'));
+    next();
+  }
   catch{next(new Error('Invalid token'));}
 });
 
 io.on('connection', socket => {
   const userId=socket.userData.userId;
-  const user=users.get(userId);
+  const user=profileUser(userId,socket.userData.profileId)||users.get(userId);
   if(!user){socket.disconnect();return;}
 
   // Track socket sets per user (multiple tabs support)

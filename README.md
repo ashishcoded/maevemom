@@ -87,7 +87,7 @@ Incognito tab: Login as disha  → Join Room
 - ✅ Video loads for BOTH users simultaneously
 
 ### Upload
-- ✅ Upload video files from your computer (up to 2GB)
+- ✅ Upload video files from your computer in sequential 8 MiB chunks (server limit 20 GiB; library budget 12 GiB by default)
 - ✅ Real-time upload progress bar
 - ✅ Uploaded videos listed in Media tab
 - ✅ Click any uploaded video to play it for both users
@@ -158,6 +158,7 @@ PORT=3000
 MAX_UPLOAD_BYTES=21474836480
 MEDIA_BUDGET_BYTES=12884901888
 FFMPEG_PATH=ffmpeg
+STORAGE_DIR=/var/data
 ```
 
 ### Large files and movie formats
@@ -165,6 +166,8 @@ FFMPEG_PATH=ffmpeg
 Uploads support common movie containers such as MP4, MKV, HEVC/H.265 files, AVI, MOV, M4V, TS/M2TS, WMV, FLV, MPEG and 3GP. Files are served with HTTP range requests, so playback seeks and buffers in chunks instead of downloading the whole movie first.
 
 Browsers do not natively decode every codec (notably many MKV, HEVC/H.265 and AVI downloads). Install [FFmpeg](https://ffmpeg.org/download.html) on the server and ensure `ffmpeg` is on `PATH`, or set `FFMPEG_PATH` to its executable. The app then creates a browser-compatible H.264/AAC MP4 stream automatically when the original cannot play. Conversion runs after upload and can take time for very large movies; upload progress remains separate from conversion progress.
+
+For hosted installs, mount a persistent volume and set `STORAGE_DIR` to its mount path. The video files and library index are stored there. Without a persistent volume, the platform may erase uploads on restart or redeploy, and platform-level upload/disk limits may be lower than the app limits above.
 
 ---
 
