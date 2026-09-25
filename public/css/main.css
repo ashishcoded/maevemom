@@ -228,6 +228,8 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 .pc-loader-ring{width:56px;height:56px;border-radius:50%;border:3px solid rgba(255,255,255,.12);border-top-color:var(--red);border-right-color:#ff6b9d;animation:rspin 1s linear infinite}
 .pc-loader-text{font-family:var(--f-osw);font-size:1.05rem;letter-spacing:.05em;color:#fff}
 .pc-loader-sub{font-size:.76rem;color:rgba(255,255,255,.6)}
+.pc-action{margin-top:.45rem;padding:.68rem 1.15rem;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font:600 .86rem var(--f-body,Arial,sans-serif);cursor:pointer}
+.pc-action:hover{background:rgba(255,255,255,.2)}
 .pe-reel{font-size:3rem;opacity:.18;animation:rspin 10s linear infinite}
 @keyframes rspin{to{transform:rotate(360deg)}}
 .pe-t{font-family:var(--f-osw);font-weight:600;font-size:1.3rem;letter-spacing:.04em;color:var(--t2)}
@@ -355,6 +357,7 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 .mi-nm{font-size:.78rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mi-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px}
 .mi-sz,.mi-owner{font-size:.64rem;color:var(--t3)}
+.mi-unavailable{font-size:.66rem;color:#ff9297}
 .mi-owner{display:inline-flex;align-items:center;gap:5px}
 .mi-owner-dot{width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:.56rem;flex-shrink:0}
 .mi-actions{display:flex;align-items:center;gap:5px;flex-shrink:0}
@@ -367,6 +370,7 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 .mi-rename-btn.save{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.28);color:#8ff0ae}
 .mi-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.05);color:var(--t2);transition:var(--tr)}
 .mi-btn:hover{background:rgba(255,255,255,.1);color:var(--t)}
+.mi-btn:disabled{opacity:.35;cursor:not-allowed}
 .mi-btn.del:hover{background:rgba(229,9,20,.15);border-color:rgba(229,9,20,.24);color:#ff6464}
 .mi-btn.play:hover{background:rgba(34,197,94,.14);border-color:rgba(34,197,94,.24);color:#8df0a5}
 .mi-btn.ord:hover{background:rgba(99,102,241,.16);border-color:rgba(99,102,241,.24);color:#b6bcff}

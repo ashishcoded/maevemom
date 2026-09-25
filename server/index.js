@@ -239,6 +239,7 @@ function pubMediaItem(item) {
     url: '/api/media/' + item.id + '/stream',
     compatibleUrl: '/api/media/' + item.id + '/stream?variant=compatible',
     requiresCompatibility: !NATIVE_VIDEO_EXTENSIONS.has(path.extname(item.filename || '').toLowerCase()),
+    available: !!item.filename && fs.existsSync(path.join(uploadsDir, item.filename)),
     size: item.size,
     uploadedAt: item.uploadedAt,
     order: item.order,
@@ -269,48 +270,56 @@ function compatibleStatus(item) {
   if (fs.existsSync(compatiblePath(item))) return { status:'ready' };
   return active || { status:'idle' };
 }
-function startCompatibleTranscode(item) {
-  const current = compatibleStatus(item);
-  if (current.status !== 'idle') return current;
+function startCompatibleTranscode(item, { forceEncode = false } = {}) {
+  const existing = transcodes.get(item.id);
+  if (existing?.status === 'processing') return existing;
+  if (!forceEncode) {
+    const current = compatibleStatus(item);
+    if (current.status !== 'idle') return current;
+  }
   const source = path.join(uploadsDir, item.filename);
-  const output = compatibleTempPath(item);
-  try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
   if (!fs.existsSync(source)) return { status:'missing' };
 
-  const state = { status:'processing' };
+  const state = { status:'processing', mode:forceEncode ? 'encode' : 'remux' };
   transcodes.set(item.id, state);
-  let child;
-  try {
-    child = spawn(FFMPEG_PATH, [
-      '-y', '-i', source,
-      '-map', '0:v:0?', '-map', '0:a?',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
-      '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', output
-    ], { windowsHide:true });
-  } catch (error) {
-    state.status = 'unavailable';
-    state.error = error.message;
-    return state;
-  }
-  child.once('error', error => {
-    state.status = 'unavailable';
-    state.error = error.message;
+  const run = encode => {
+    const output = compatibleTempPath(item);
     try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
-  });
-  child.once('close', code => {
-    if (code === 0 && fs.existsSync(output)) {
-      try {
-        fs.renameSync(output, compatiblePath(item));
-        transcodes.set(item.id, { status:'ready' });
-      } catch (error) {
-        transcodes.set(item.id, { status:'failed', error:'Could not save the converted video. Check server storage.' });
+    const args = encode
+      ? ['-y','-i',source,'-map','0:v:0?','-map','0:a?','-c:v','libx264','-preset','veryfast','-crf','23','-c:a','aac','-b:a','160k','-movflags','+faststart',output]
+      : ['-y','-i',source,'-map','0:v:0?','-map','0:a?','-c','copy','-movflags','+faststart',output];
+    let child, spawnFailed = false;
+    state.mode = encode ? 'encode' : 'remux';
+    try { child = spawn(FFMPEG_PATH, args, { windowsHide:true, stdio:['ignore','ignore','ignore'] }); }
+    catch (error) {
+      state.status = 'unavailable'; state.error = error.message; return;
+    }
+    child.once('error', error => {
+      spawnFailed = true;
+      state.status = 'unavailable';
+      state.error = error.message;
+      try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
+    });
+    child.once('close', code => {
+      if (spawnFailed) return;
+      if (code === 0 && fs.existsSync(output)) {
+        try {
+          fs.renameSync(output, compatiblePath(item));
+          transcodes.set(item.id, { status:'ready', mode:encode ? 'encode' : 'remux' });
+        } catch (error) {
+          transcodes.set(item.id, { status:'failed', error:'Could not save the converted video. Check server storage.' });
+          try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
+        }
+      } else if (!encode) {
+        try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
+        run(true);
+      } else {
+        transcodes.set(item.id, { status:'failed', error:'FFmpeg could not convert this video.' });
         try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
       }
-    } else {
-      transcodes.set(item.id, { status:'failed', error:'FFmpeg could not convert this video.' });
-      try { if (fs.existsSync(output)) fs.unlinkSync(output); } catch {}
-    }
-  });
+    });
+  };
+  run(forceEncode);
   return state;
 }
 function normalizeMediaDisplayName(rawName, fallbackName) {
@@ -910,13 +919,18 @@ app.get('/api/media/:mediaId/stream', (req,res) => {
   if (!item) return res.status(404).json({ error:'Video not found' });
   const useCompatible = req.query.variant === 'compatible';
   const filePath = path.join(uploadsDir, useCompatible ? compatibleFilename(item) : item.filename);
+  if (!fs.existsSync(filePath)) return res.status(410).json({ error:useCompatible ? 'Converted video is not available yet.' : 'This video file is missing from server storage. Upload it again from a persistent storage volume.' });
   streamMediaFile(req, res, filePath);
 });
 app.post('/api/library/:mediaId/compatible', authMw, (req,res) => {
   const item = findMediaItem(req.params.mediaId);
   if (!item) return res.status(404).json({ error:'Video not found' });
-  const status = startCompatibleTranscode(item);
-  res.json({ ...status, url: status.status === 'ready' ? '/api/media/' + item.id + '/stream?variant=compatible' : null });
+  if (!fs.existsSync(path.join(uploadsDir, item.filename)))
+    return res.status(410).json({ status:'missing', error:'The original video is missing from server storage. Upload it again from a persistent storage volume.' });
+  const status = startCompatibleTranscode(item, { forceEncode:req.body?.forceEncode === true });
+  if (status.status === 'missing') return res.status(410).json({ status:'missing', error:'The original video is missing from server storage. Upload it again from a persistent storage volume.' });
+  const encodedQuery = status.mode === 'encode' ? '&encoding=h264' : '';
+  res.json({ ...status, url: status.status === 'ready' ? '/api/media/' + item.id + '/stream?variant=compatible' + encodedQuery : null });
 });
 
 app.use('/uploads', express.static(uploadsDir));

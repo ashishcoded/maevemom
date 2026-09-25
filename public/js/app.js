@@ -364,9 +364,36 @@ function setPlayerConnecting(show, text='Connecting room…', sub='Restoring syn
   const el = $('player-connect');
   if (!el) return;
   el.classList.toggle('hidden', !show);
+  $('player-connect-action')?.classList.add('hidden');
+  el.querySelector('.pc-loader-ring')?.classList.toggle('hidden', !show);
   if ($('player-connect-sub')) $('player-connect-sub').textContent = sub;
   const txt = el.querySelector('.pc-loader-text');
   if (txt) txt.textContent = text;
+}
+function showVideoPlayPrompt(video) {
+  if (S._nativeVid !== video) return;
+  const overlay = $('player-connect'), ring = overlay?.querySelector('.pc-loader-ring');
+  const title = overlay?.querySelector('.pc-loader-text'), sub = $('player-connect-sub');
+  const action = $('player-connect-action');
+  if (!overlay || !action) return;
+  overlay.classList.remove('hidden');
+  ring?.classList.add('hidden');
+  if (title) title.textContent = S.isOwner ? 'Ready to play' : 'Ready to sync';
+  if (sub) sub.textContent = 'Your browser needs one tap before it can start video with sound.';
+  action.textContent = S.isOwner ? 'Tap to play video' : 'Tap to start synchronized playback';
+  action.classList.remove('hidden');
+  action.onclick = async () => {
+    if (S._nativeVid !== video) return;
+    action.disabled = true;
+    try {
+      await video.play();
+      overlay.classList.add('hidden');
+      if (!S.isOwner && S.socket?.connected && S.room?.id) S.socket.emit('request_sync', { roomId:S.room.id });
+    } catch {
+      action.disabled = false;
+      if (video.error) toast('This video format is not supported here. Check that FFmpeg is installed on the server.');
+    }
+  };
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -1042,6 +1069,7 @@ function buildHomeCards() {
 
 function resetPlayerUI() {
   stopAllTimers();
+  setPlayerConnecting(false);
   if(S._nativeVid){S._nativeVid.remove();S._nativeVid=null;}
   const fr=$('vframe'), pempty=$('pempty');
   if(fr){fr.src='';fr.style.display='none';}
@@ -1734,6 +1762,7 @@ window.doLoadVid = () => {
 // ── Load video ────────────────────────────────────────────────────────────────
 function loadVidUrl(url,title,meta,type) {
 
+  setPlayerConnecting(false);
   handleLobbyMusic(false);
   clearEmbedSyncPulse();
 
@@ -1752,7 +1781,7 @@ function loadVidUrl(url,title,meta,type) {
   if(type==='direct'){
     fr.style.display='none';pempty.style.display='none';
     const vid=document.createElement('video');
-    vid.src=safeUrl;vid.controls=true;vid.preload='auto';
+    vid.src=safeUrl;vid.controls=true;vid.preload='metadata';vid.playsInline=true;
     vid.style.cssText='width:100%;height:100%;background:#000;display:block';
     if(S.isOwner){
       vid.addEventListener('play',  ()=>{clockTick(true, vid.currentTime); sendOwnerSync(true, vid.currentTime);});
@@ -1761,11 +1790,11 @@ function loadVidUrl(url,title,meta,type) {
     }
     const sourceMediaId = (safeUrl.match(/\/api\/media\/([^/?]+)\/stream/i) || [])[1];
     if (sourceMediaId) {
-      let fallbackStarted = false;
+      let fallbackAttempts = 0;
       vid.addEventListener('error', () => {
-        if (fallbackStarted || vid.dataset.compatible === 'true') return;
-        fallbackStarted = true;
-        loadCompatibleVideo(vid, sourceMediaId);
+        if (fallbackAttempts >= 2) return;
+        fallbackAttempts += 1;
+        loadCompatibleVideo(vid, sourceMediaId, fallbackAttempts === 2);
       });
     }
     player.appendChild(vid);
@@ -1798,21 +1827,21 @@ function loadVidUrl(url,title,meta,type) {
 // Heartbeat every 2s broadcasts current time+playing to all guests.
 // This works regardless of whether the iframe sends postMessage events.
 
-async function loadCompatibleVideo(video, mediaId) {
+async function loadCompatibleVideo(video, mediaId, forceEncode=false) {
   const resumeAt = Number(video.currentTime) || 0;
-  const shouldPlay = !video.paused;
+  const shouldPlay = !video.paused || video.dataset.wantPlayback === 'true';
   setPlayerConnecting(true, 'Preparing video…', 'Converting this format for browser playback');
   for (let attempt = 0; attempt < 900; attempt += 1) {
     if (S._nativeVid !== video) return;
     try {
-      const result = await api('POST', '/library/' + encodeURIComponent(mediaId) + '/compatible');
+      const result = await api('POST', '/library/' + encodeURIComponent(mediaId) + '/compatible', { forceEncode });
       if (result.status === 'ready' && result.url) {
         video.dataset.compatible = 'true';
         video.src = result.url;
         video.load();
         video.addEventListener('loadedmetadata', () => {
           try { video.currentTime = resumeAt; } catch {}
-          if (shouldPlay) video.play().catch(() => {});
+          if (shouldPlay) video.play().catch(() => showVideoPlayPrompt(video));
         }, { once:true });
         setPlayerConnecting(false);
         toast('Playing browser-compatible stream');
@@ -1820,6 +1849,7 @@ async function loadCompatibleVideo(video, mediaId) {
       }
       if (result.status === 'unavailable') throw new Error('FFmpeg is not installed on this server. Install it to play MKV, HEVC, AVI and other unsupported formats.');
       if (result.status === 'failed') throw new Error(result.error || 'This video could not be converted.');
+      if (result.status === 'missing') throw new Error(result.error || 'This video file is missing from server storage. Upload it again.');
     } catch (error) {
       setPlayerConnecting(false);
       toast(error.message || 'This video format is not supported by this browser.');
@@ -1877,7 +1907,7 @@ function applySync(playing,time,isSeeked) {
     const v=S._nativeVid;
     const drift=Math.abs(v.currentTime-time);
     if(isSeeked||drift>2.5) { try{v.currentTime=time;}catch{} }
-    if(playing&&v.paused)  v.play().catch(()=>{});
+    if(playing&&v.paused)  v.play().catch(()=>showVideoPlayPrompt(v));
     if(!playing&&!v.paused) v.pause();
     return;
   }
@@ -2155,7 +2185,8 @@ function renderMediaList(vs){
 function makeMediaItem(v, opts = {}) {
   const d=document.createElement('div');d.className='media-item';
   const ownerPill = opts.showOwner ? `<span class="mi-owner"><span class="mi-owner-dot" style="background:${v.ownerAvatarColor||'#444'}">${esc(v.ownerAvatar||'?')}</span>${esc(v.ownerName||'You')}</span>` : '';
-  d.innerHTML=`<span style="font-size:1.1rem">🎬</span><div class="mi-main"><div class="mi-nm" title="${esc(v.originalName)}">${esc(v.originalName)}</div><div class="mi-meta">${ownerPill}<span class="mi-sz">${fmtSz(v.size)}</span></div></div><div class="mi-actions"></div>`;
+  const missingFile = v.available === false;
+  d.innerHTML=`<span style="font-size:1.1rem">🎬</span><div class="mi-main"><div class="mi-nm" title="${esc(v.originalName)}">${esc(v.originalName)}</div><div class="mi-meta">${ownerPill}<span class="mi-sz">${fmtSz(v.size)}</span>${missingFile?'<span class="mi-unavailable">File missing — upload again</span>':''}</div></div><div class="mi-actions"></div>`;
   const actions = d.querySelector('.mi-actions');
   const main = d.querySelector('.mi-main');
   const nameEl = d.querySelector('.mi-nm');
@@ -2222,10 +2253,12 @@ function makeMediaItem(v, opts = {}) {
   if (S.room) {
     const play=document.createElement('button');
     play.className='mi-btn play'; play.title='Play for both';
+    play.disabled=missingFile;
+    if(missingFile)play.title='Video file missing from server storage';
     play.innerHTML='<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
     play.onclick=e=>{e.stopPropagation();playMediaItem(v);};
     actions.appendChild(play);
-    d.addEventListener('click',()=>{ if (!isEditing) playMediaItem(v); });
+    d.addEventListener('click',()=>{ if (!isEditing && !missingFile) playMediaItem(v); });
   }
   if (opts.editable) {
     const rename=document.createElement('button');
@@ -2253,8 +2286,11 @@ function makeMediaItem(v, opts = {}) {
   return d;
 }
 function playMediaItem(v){
+  if(v.available===false){toast('This video file is missing from server storage. Upload it again from your saved copy.');return;}
   if(S.socket&&S.room)S.socket.emit('set_video',{roomId:S.room.id,video:{url:v.url,title:v.originalName,meta:`Saved by ${v.ownerName||'You'}`,type:'direct',mediaId:v.id}});
-  loadVidUrl(v.url,v.originalName,`Saved by ${v.ownerName||'You'}`,'direct');sbTab('chat');toast('Playing: '+v.originalName);
+  loadVidUrl(v.url,v.originalName,`Saved by ${v.ownerName||'You'}`,'direct');
+  if(S._nativeVid){S._nativeVid.dataset.wantPlayback='true';S._nativeVid.play().catch(()=>showVideoPlayPrompt(S._nativeVid));}
+  sbTab('chat');toast('Starting playback for the room: '+v.originalName);
 }
 function fmtSz(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';if(b<1073741824)return(b/1048576).toFixed(1)+'MB';return(b/1073741824).toFixed(2)+'GB';}
 
