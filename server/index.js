@@ -95,7 +95,7 @@ function disconnectDeviceSession(sessionId) {
   for(const socket of io.sockets.sockets.values()) if(socket.userData?.sid===sessionId) socket.disconnect(true);
 }
 const safeProfileColor = value => /^#[0-9a-f]{6}$/i.test(String(value||'')) ? String(value) : '#e50914';
-const safeAvatarKey = value => /^(?:classic-(?:0[1-9]|1[0-2])|show-(?:0[1-9]|1[0-4]))$/.test(String(value||'')) ? String(value) : 'classic-01';
+const safeAvatarKey = value => /^(?:classic-(?:0[1-9]|1[0-5])|show-(?:0[1-9]|1[0-4]))$/.test(String(value||'')) ? String(value) : 'classic-01';
 function ensureUserProfiles(userId) {
   const user=users.get(userId); if(!user) return [];
   if(!userProfiles.has(userId) || !userProfiles.get(userId).length) {
@@ -108,13 +108,14 @@ function ensureUserProfiles(userId) {
 }
 function publicProfile(profile) {
   const avatarKey=safeAvatarKey(profile.avatarKey);
-  return {id:profile.id,name:profile.name,avatarKey,avatarColor:safeProfileColor(profile.avatarColor),avatarUrl:profile.avatarUrl || (avatarKey.startsWith('show-')?`/images/profile-avatars/${avatarKey}.png`:null),locked:!!profile.pinHash,createdAt:profile.createdAt};
+  const avatarUrl=profile.avatarUrl || (avatarKey.startsWith('show-')?`/images/profile-avatars/${avatarKey}.png`:avatarKey.startsWith('classic-')?`/images/avatar/avatar-${avatarKey.slice(-2)}.png`:null);
+  return {id:profile.id,name:profile.name,avatarKey,avatarColor:safeProfileColor(profile.avatarColor),avatarUrl,locked:!!profile.pinHash,createdAt:profile.createdAt};
 }
 function profileUser(userId,profileId) {
   const user=users.get(userId); if(!user) return null;
   const profile=ensureUserProfiles(userId).find(item=>item.id===profileId) || ensureUserProfiles(userId)[0];
   const emoji=String(profile.avatarEmoji||'');
-  const avatarKey=safeAvatarKey(profile.avatarKey),avatarUrl=profile.avatarUrl || (avatarKey.startsWith('show-')?`/images/profile-avatars/${avatarKey}.png`:user.avatarUrl || null);
+  const avatarKey=safeAvatarKey(profile.avatarKey),avatarUrl=profile.avatarUrl || (avatarKey.startsWith('show-')?`/images/profile-avatars/${avatarKey}.png`:avatarKey.startsWith('classic-')?`/images/avatar/avatar-${avatarKey.slice(-2)}.png`:user.avatarUrl || null);
   return {...uPub(user),profileId:profile.id,profileAvatarKey:avatarKey,displayName:profile.name,avatar:emoji.length<=8&&!/[<>&"'`]/.test(emoji)?emoji:user.avatar,avatarColor:safeProfileColor(profile.avatarColor),avatarUrl};
 }
 function createSessionToken(userId,profileId,req,sessionId=null) {
@@ -473,14 +474,17 @@ function authMw(req,res,next){
 // ── Routes ─────────────────────────────────────────────────────────────────────
 app.post('/api/auth/register', async (req,res) => {
   try {
-    const {username,displayName,password}=req.body;
-    if(!username||!displayName||!password) return res.status(400).json({error:'All fields required'});
+    const {username,displayName,email,password}=req.body;
+    if(!username||!displayName||!email||!password) return res.status(400).json({error:'All fields required'});
     if(password.length<6) return res.status(400).json({error:'Password 6+ chars'});
     if(!/^[a-z0-9_]{2,20}$/i.test(username)) return res.status(400).json({error:'Username: 2-20 chars (a-z 0-9 _)'});
     if([...users.values()].find(u=>u.username.toLowerCase()===username.toLowerCase())) return res.status(409).json({error:'Username taken'});
+    const normalizedEmail=String(email).trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalizedEmail)) return res.status(400).json({error:'Enter a valid email address'});
+    if([...users.values()].find(u=>u.email?.toLowerCase()===normalizedEmail)) return res.status(409).json({error:'Email address already in use'});
     const clrs=['#e50914','#ff6b9d','#f59e0b','#10b981','#6366f1','#ec4899','#06b6d4','#84cc16'];
     const id='user_'+uuidv4().replace(/-/g,'').slice(0,10);
-    const user={id,username:username.toLowerCase(),displayName:displayName.trim(),
+    const user={id,username:username.toLowerCase(),email:normalizedEmail,displayName:displayName.trim(),
       avatar:displayName.trim()[0].toUpperCase(),
       avatarColor:clrs[Math.floor(Math.random()*clrs.length)],
       avatarUrl:null,bio:'Movie lover',
@@ -509,6 +513,11 @@ app.get('/api/auth/me', authMw, (req,res) => {
   const u=users.get(req.user.userId);
   if(!u) return res.status(404).json({error:'Not found'});
   res.json({user:profileUser(u.id,req.user.profileId)});
+});
+app.get('/api/auth/account',authMw,(req,res)=>{
+  const user=users.get(req.user.userId);
+  if(!user)return res.status(404).json({error:'Not found'});
+  res.json({username:user.username,email:user.email||null});
 });
 app.post('/api/auth/logout',authMw,(req,res)=>{
   if(req.user.sid){disconnectDeviceSession(req.user.sid);saveDeviceSessions();}
@@ -545,7 +554,7 @@ app.patch('/api/profiles/:id',authMw,async(req,res)=>{
   const profile=ensureUserProfiles(req.user.userId).find(item=>item.id===req.params.id);
   if(!profile) return res.status(404).json({error:'Profile not found'});
   if(req.body.name!==undefined){const name=String(req.body.name).trim().replace(/\s+/g,' ').slice(0,24);if(!name)return res.status(400).json({error:'Enter a profile name'});profile.name=name;}
-  if(req.body.avatarKey!==undefined) profile.avatarKey=safeAvatarKey(req.body.avatarKey);
+  if(req.body.avatarKey!==undefined){const nextAvatarKey=safeAvatarKey(req.body.avatarKey);if(nextAvatarKey!==profile.avatarKey)profile.avatarUrl=null;profile.avatarKey=nextAvatarKey;}
   if(req.body.avatarColor!==undefined && /^#[0-9a-f]{6}$/i.test(String(req.body.avatarColor))) profile.avatarColor=String(req.body.avatarColor);
   if(req.body.avatarEmoji!==undefined) profile.avatarEmoji=String(req.body.avatarEmoji).slice(0,8);
   if(req.body.pin!==undefined){const pin=String(req.body.pin);if(pin && !/^\d{4}$/.test(pin))return res.status(400).json({error:'Profile PIN must be exactly 4 digits'});profile.pinHash=pin?await bcrypt.hash(pin,10):null;}

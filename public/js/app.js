@@ -1,4 +1,4 @@
-/* ══════════════════════════════════════════════════════════════
+﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    Maeve'mom v5 — All bugs fixed
    
    BUG FIXES:
@@ -13,9 +13,9 @@
    #8 Mute visibility: socket event + viewer bar + call bar
    #9 Font: Bebas Neue (cinematic) + Oswald + Space Grotesk
    #10 No regressions
-══════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-// ── Emoji rendering ───────────────────────────────────────────────────────────
+// â”€â”€ Emoji rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TW_BASE = 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/';
 const IOS_EMOJI_BASE = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple/img/apple/64/';
 function tw(text) {
@@ -26,14 +26,14 @@ function twEl(el) {
   if (window.twemoji) twemoji.parse(el, { folder:'svg', ext:'.svg', base:TW_BASE });
 }
 function emojiCode(emoji) {
-  return Array.from(emoji, ch => ch.codePointAt(0).toString(16)).join('-');
+  return Array.from(emoji).map(ch=>ch.codePointAt(0)).filter(code=>code!==0xfe0e&&code!==0xfe0f).map(code=>code.toString(16)).join('-');
 }
 function reactionEmoji(emoji, cls = '') {
   const klass = ['emoji-ios', cls].filter(Boolean).join(' ');
-  return `<img class="${klass}" src="${IOS_EMOJI_BASE}${emojiCode(emoji)}.png" alt="${emoji}" draggable="false">`;
+  return `<span class="emoji-fallback ${klass}" aria-hidden="true" hidden>${alertEsc(emoji)}</span><img class="${klass}" src="${IOS_EMOJI_BASE}${emojiCode(emoji)}.png" alt="${alertEsc(emoji)}" draggable="false" onerror="this.hidden=true;this.style.display='none';this.previousElementSibling.hidden=false">`;
 }
 
-const DEFAULT_EMOJIS = ['❤️','😂','😍','😮','🔥','👏','🍿','💕','😭','✨','🎬'];
+const DEFAULT_EMOJIS = ['\u{2764}\u{FE0F}','\u{1F602}','\u{1F60D}','\u{1F62E}','\u{1F525}','\u{1F44F}','\u{1F37F}','\u{1F495}','\u{1F62D}','\u{2728}','\u{1F3AC}'];
 const DEFAULT_TEMPLATES = ['Playing smoothly?','Wow','Are you here?','Any issue?'];
 const STORAGE_KEYS = {
   templates: 'mm_tpl',
@@ -47,7 +47,7 @@ const STICKER_MAX_BYTES = 256 * 1024;
 const STICKER_DATA_PREFIX = 'data:image/png;base64,';
 const DHURANDHAR_LOGO_SRC = '/images/dhurandhar-the-revenge.png';
 
-// ── State ─────────────────────────────────────────────────────────────────────
+// â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const S = {
   token:   localStorage.getItem('mm_tok') || null,
   user:    (() => { try { return JSON.parse(localStorage.getItem('mm_usr')||'null'); } catch { return null; } })(),
@@ -58,7 +58,6 @@ const S = {
   typing:  { timer:null, active:false },
   vid:     { url:null, title:'', meta:'', type:'embed' },
   msgIds:  new Set(),
-  pendingClr: null,
   pendingAvFile: null,
   sidebarOpen: true,
   chatVisible: true,         // chat panel visible state
@@ -152,6 +151,7 @@ function normalizeChatTextStyle(style) {
 function normalizeEnabledEmojis(list) {
   const all = getAllEmojis();
   const source = Array.isArray(list) ? list : all;
+  if(source.some(value=>/[\u00f0\u0178\u00e2]/.test(String(value)))) return all.slice();
   const next = all.filter(em => source.includes(em));
   return next.length ? next : all.slice();
 }
@@ -178,7 +178,7 @@ S.enabledEmojis = normalizeEnabledEmojis(S.enabledEmojis);
 S.stickers = normalizeStickers(S.stickers);
 S.chatTextStyle = normalizeChatTextStyle(S.chatTextStyle);
 
-// ── API ───────────────────────────────────────────────────────────────────────
+// â”€â”€ API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function api(method, path, body) {
   const h = { 'Content-Type':'application/json' };
   if (S.token) h.Authorization = 'Bearer ' + S.token;
@@ -396,7 +396,7 @@ function showVideoPlayPrompt(video) {
   };
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.addEventListener('DOMContentLoaded', async () => {
   // Auth tabs
   $$('.atab').forEach(b => b.addEventListener('click', () => {
@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initHomeHeroScene();
 });
 
-// ── Noise canvas ──────────────────────────────────────────────────────────────
+// â”€â”€ Noise canvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function drawNoise() {
   const c = $('noise-canvas'); if (!c) return;
   const ctx = c.getContext('2d');
@@ -468,8 +468,8 @@ function drawNoise() {
   ctx.putImageData(img, 0, 0);
 }
 
-// ── Emoji strips — BUG FIX #6 (11 emojis, Twemoji SVG) ───────────────────────
-const EMOJIS = ['❤️','😂','😍','😮','🔥','👏','🍿','💕','😭','✨','🎬'];
+// â”€â”€ Emoji strips — BUG FIX #6 (11 emojis, Twemoji SVG) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const EMOJIS = DEFAULT_EMOJIS;
 
 function buildEmojiStrips() {
   buildStrip('emj-strip', S.enabledEmojis, em => sendEmoji(em));
@@ -868,11 +868,11 @@ window.toggleOverlayChat = () => {
   revealPlayerUi();
 };
 
-// ── Session ───────────────────────────────────────────────────────────────────
+// â”€â”€ Session â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function persist(u, tok) { S.user=u; S.token=tok; localStorage.setItem('mm_tok',tok); localStorage.setItem('mm_usr',JSON.stringify(u)); }
 function clearSession() { S.user=null; S.token=null; localStorage.removeItem('mm_tok'); localStorage.removeItem('mm_usr'); }
 
-// ── Screens ───────────────────────────────────────────────────────────────────
+// â”€â”€ Screens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function goAuth() { setScreen('auth'); }
 function goRoom() { setScreen('room'); }
 function goHome() {
@@ -990,7 +990,7 @@ document.addEventListener('click', event => {
   if (!event.target.closest('.hn-profile-wrap')) closeProfileMenu();
 });
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') { closeQuickAlert(); closeProfileMenu(); }
+  if (event.key === 'Escape') { if($('change-avatar-overlay')?.classList.contains('is-open')){closeChangeAvatar();return;} closeQuickAlert(); closeProfileMenu(); }
 });
 function setScreen(n) {
   ['auth','home','room'].forEach(s => {
@@ -1127,7 +1127,7 @@ function renderUserLibraryList(id, items, editable) {
   items.forEach((item, idx) => list.appendChild(makeMediaItem(item, { editable, showOwner:false, index:idx })));
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
+// â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.quickLogin = async (u,p) => { $('l-user').value=u; $('l-pass').value=p; await doLogin(); };
 window.doLogin = async () => {
   const u=$('l-user').value.trim(), p=$('l-pass').value, e=$('l-err'); e.textContent='';
@@ -1139,30 +1139,60 @@ window.doLogin = async () => {
   } catch(ex){e.textContent=ex.message;}
 };
 window.doRegister = async () => {
-  const u=$('r-user').value.trim(),n=$('r-name').value.trim(),p=$('r-pass').value,e=$('r-err');e.textContent='';
-  if(!u||!n||!p){e.textContent='Fill in all fields';return;}
+  const u=$('r-user').value.trim(),n=$('r-name').value.trim(),email=$('r-email').value.trim(),p=$('r-pass').value,e=$('r-err');e.textContent='';
+  if(!u||!n||!email||!p){e.textContent='Fill in all fields';return;}
   if(p.length<6){e.textContent='Password 6+ chars';return;}
-  try{const{token,user}=await api('POST','/auth/register',{username:u,displayName:n,password:p});persist(user,token);goHome();}catch(ex){e.textContent=ex.message;}
+  try{const{token,user}=await api('POST','/auth/register',{username:u,displayName:n,email,password:p});persist(user,token);goHome();}catch(ex){e.textContent=ex.message;}
 };
 window.signOut = () => { if(S.token)api('POST','/auth/logout',{}).catch(()=>{});closeProfileSwitcher();endCall(); stopAllTimers(); clearRoomSession(); if(S.socket){S.socket.disconnect();S.socket=null;} S.room=null; S.library={items:[],usage:null}; $$('.overlay').forEach(o=>o.classList.add('hidden')); clearSession(); goAuth(); };
 
-// ── Modals ────────────────────────────────────────────────────────────────────
+// â”€â”€ Modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.openCreateModal  = () => { $('c-name').value='';$('c-pw').value='';$('c-err').textContent='';$('c-priv').checked=false;$('c-pw-w').classList.add('hidden');$('m-create').classList.remove('hidden');setTimeout(()=>$('c-name').focus(),50); };
 window.openJoinModal    = () => { $('j-err').textContent='';$('j-pw-w').classList.add('hidden');$('m-join').classList.remove('hidden');setTimeout(()=>{if(!$('j-id').value)$('j-id').focus();},50); };
 window.openVideoModal   = () => { $('v-url').value='';$('v-err').textContent='';$('sel-prev').classList.add('hidden');$('v-load-btn').disabled=true;S.vid={url:null,title:'',meta:'',type:'embed'};$('m-video').classList.remove('hidden'); };
 window.openLibraryModal = () => { $('m-library').classList.remove('hidden'); loadLibrary(true); };
 window.openInvitePanel  = () => { setSidebar(true); sbTab('room'); revealPlayerUi(true); };
 const PROFILE_AVATARS = [
-  {key:'classic-01',emoji:'😀',color:'#62bb75',group:'classic'},{key:'classic-02',emoji:'😎',color:'#3686c8',group:'classic'},
-  {key:'classic-03',emoji:'🤩',color:'#dc7e32',group:'classic'},{key:'classic-04',emoji:'😺',color:'#b2509a',group:'classic'},
-  {key:'classic-05',emoji:'🦊',color:'#e87936',group:'classic'},{key:'classic-06',emoji:'🐼',color:'#5987a0',group:'classic'},
-  {key:'classic-07',emoji:'🦁',color:'#d6a53a',group:'classic'},{key:'classic-08',emoji:'🐯',color:'#ed7040',group:'classic'},
-  {key:'classic-09',emoji:'🦄',color:'#9d66c7',group:'classic'},{key:'classic-10',emoji:'🐻',color:'#98654b',group:'classic'},
-  {key:'classic-11',emoji:'🐸',color:'#4ba77e',group:'classic'},{key:'classic-12',emoji:'🐨',color:'#778b9a',group:'classic'},
-  ...Array.from({length:14},(_,index)=>({key:`show-${String(index+1).padStart(2,'0')}`,emoji:'',src:`/images/profile-avatars/show-${String(index+1).padStart(2,'0')}.png`,color:['#ed7600','#79ca50','#05778e','#1761c5','#bd6e00','#176b39','#398acb','#7211a6','#c51748','#e45b38','#d83b91','#6512a4','#bb1242','#097aa1'][index],group:'shows'})),
+  ...Array.from({length:15},(_,index)=>({key:`classic-${String(index+1).padStart(2,'0')}`,emoji:'',src:`/images/avatar/avatar-${String(index+1).padStart(2,'0')}.png`,color:['#62bb75','#3686c8','#dc7e32','#b2509a','#e87936','#5987a0','#d6a53a','#ed7040','#9d66c7','#98654b','#4ba77e','#778b9a','#c14a62','#528cbd','#bd8b42'][index],group:'classic'})),
+  ...Array.from({length:13},(_,index)=>({key:`show-${String(index+1).padStart(2,'0')}`,emoji:'',src:`/images/profile-avatars/show-${String(index+1).padStart(2,'0')}.png`,color:['#ed7600','#79ca50','#05778e','#1761c5','#bd6e00','#176b39','#398acb','#7211a6','#c51748','#e45b38','#d83b91','#6512a4','#bb1242'][index],group:'shows'})),
 ];
 const profileFlowState={view:'choose',profiles:[],activeId:null,targetId:null,draftName:'',avatarGroup:'classic',avatarKey:'classic-01',pin:'',sessions:[]};
 const profileAvatar = profile => { const avatar=PROFILE_AVATARS.find(item=>item.key===profile.avatarKey)||PROFILE_AVATARS[0],src=profile.avatarUrl||avatar.src; return `<span class="pf-avatar" style="--av-color:${alertEsc(profile.avatarColor||avatar.color)}">${src?`<img src="${alertEsc(src)}" alt="">`:alertEsc(profile.avatarEmoji||avatar.emoji)}</span>`; };
+const changeAvatarState={profileId:null,avatarKey:null,saving:false};
+function renderChangeAvatarChoices(){
+  const content=$('change-avatar-content');if(!content)return;
+  const groups=[['Classics',PROFILE_AVATARS.filter(item=>item.group==='classic')],['From Shows & Movies',PROFILE_AVATARS.filter(item=>item.group==='shows')]];
+  content.innerHTML=groups.map(([title,items])=>`<section class="change-avatar-group"><h3>${title}</h3><div class="change-avatar-grid" role="listbox" aria-label="${title}">${items.map(item=>`<button type="button" role="option" aria-selected="${changeAvatarState.avatarKey===item.key}" class="pf-avatar-choice ${changeAvatarState.avatarKey===item.key?'selected':''}" style="--av-color:${item.color}" aria-label="Choose avatar ${item.key}" onclick="selectChangeAvatar('${item.key}')">${item.src?`<img src="${alertEsc(item.src)}" alt="">`:alertEsc(item.emoji)}</button>`).join('')}</div></section>`).join('');
+}
+window.openChangeAvatar=async event=>{
+  event?.preventDefault?.();event?.stopPropagation?.();closeProfileMenu();closeQuickAlert();
+  const overlay=$('change-avatar-overlay');if(!overlay||!S.user)return;
+  $('change-avatar-error').textContent='';$('change-avatar-save').disabled=true;overlay.classList.add('is-open');overlay.setAttribute('aria-hidden','false');
+  changeAvatarState.saving=false;
+  try{
+    const result=await api('GET','/profiles');
+    const activeId=result.activeProfileId||S.user.profileId;
+    const active=(result.profiles||[]).find(profile=>profile.id===activeId);
+    if(!active)throw new Error('Active profile could not be found');
+    changeAvatarState.profileId=active.id;changeAvatarState.avatarKey=active.avatarKey||S.user.profileAvatarKey||'classic-01';
+    renderChangeAvatarChoices();$('change-avatar-save').disabled=false;
+  }catch(error){$('change-avatar-error').textContent=error.message;}
+  setTimeout(()=>$('change-avatar-overlay')?.querySelector('.change-avatar-close')?.focus(),0);
+};
+window.closeChangeAvatar=()=>{const overlay=$('change-avatar-overlay');overlay?.classList.remove('is-open');overlay?.setAttribute('aria-hidden','true');changeAvatarState.saving=false;};
+window.selectChangeAvatar=key=>{if(changeAvatarState.saving)return;const scroll=$('change-avatar-content')?.scrollTop||0;changeAvatarState.avatarKey=key;renderChangeAvatarChoices();if($('change-avatar-content'))$('change-avatar-content').scrollTop=scroll;};
+window.saveChangedAvatar=async()=>{
+  if(changeAvatarState.saving||!changeAvatarState.profileId||!changeAvatarState.avatarKey)return;
+  const avatar=PROFILE_AVATARS.find(item=>item.key===changeAvatarState.avatarKey);if(!avatar)return;
+  changeAvatarState.saving=true;$('change-avatar-save').disabled=true;$('change-avatar-error').textContent='';
+  try{
+    await api('PATCH',`/profiles/${encodeURIComponent(changeAvatarState.profileId)}`,{avatarKey:avatar.key,avatarColor:avatar.color,avatarEmoji:avatar.emoji||''});
+    const me=await api('GET','/auth/me');if(me?.user)persist(me.user,S.token);
+    const activeUser=me?.user||S.user;
+    for(const id of ['hn-av','hn-pop-av']){const el=$(id);if(!el)continue;el.style.background=activeUser.avatarColor||avatar.color;el.innerHTML=activeUser.avatarUrl?`<img src="${alertEsc(activeUser.avatarUrl)}" alt="">`:alertEsc(activeUser.avatar||activeUser.displayName?.[0]||'?');}
+    closeChangeAvatar();
+  }catch(error){$('change-avatar-error').textContent=error.message;changeAvatarState.saving=false;$('change-avatar-save').disabled=false;}
+};
 const profileEscape = value => alertEsc(value);
 window.openProfileSwitcher = async event => {
   event?.stopPropagation?.();
@@ -1185,25 +1215,27 @@ function renderProfileFlow(){
     root.innerHTML=`<section class="pf-view pf-chooser-view"><h1 class="pf-title">Who's watching?</h1><div class="pf-profile-grid">${state.profiles.map(item=>profileTile(item)).join('')}${state.profiles.length<10?profileTile(null,true):''}</div><div class="pf-actions"><button class="pf-button" onclick="openProfileManage()">Manage profiles</button><button class="pf-button" onclick="openProfileSettings()">Settings</button></div></section>`;return;
   }
   if(state.view==='pin'){
-    root.innerHTML=`<section class="pf-view"><div class="pf-centered-avatar">${profileAvatar(profile)}</div><h1 class="pf-title">Verify your PIN</h1><p class="pf-subtitle">For security, enter the PIN for ${profileEscape(profile.name)}.</p><form onsubmit="unlockProfile(event)"><div class="pf-pin-row"><input class="pf-pin-cell" id="pf-enter-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" autocomplete="one-time-code" autofocus></div><p class="pf-form-error" id="pf-error"></p><button class="pf-button" type="button" onclick="renderProfileHome()">Cancel</button><button class="pf-button primary" type="submit">Continue</button></form></section>`;setTimeout(()=>$('pf-enter-pin')?.focus(),30);return;
+    root.innerHTML=`<section class="pf-view pf-pin-view"><div class="pf-centered-avatar">${profileAvatar(profile)}</div><h1 class="pf-title">Verify your PIN</h1><p class="pf-subtitle">For security, enter the PIN for ${profileEscape(profile?.name||'')}.</p><form class="pf-pin-form" onsubmit="unlockProfile(event)"><div class="pf-pin-row">${[0,1,2,3].map(idx=>`<input class="pf-pin-cell" id="pf-pin-${idx}" data-pin-idx="${idx}" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]*" autocomplete="one-time-code" ${idx===0?'autofocus':''} oninput="handlePinDigitInput(event,${idx})" onkeydown="handlePinDigitKeydown(event,${idx})" onpaste="handlePinDigitPaste(event)">`).join('')}</div><p class="pf-form-error" id="pf-error"></p><div class="pf-pin-cancel-wrap"><button class="pf-pin-cancel" type="button" onclick="cancelPinVerify()">Cancel</button></div></form></section>`;setTimeout(()=>$('pf-pin-0')?.focus(),30);return;
   }
   if(state.view==='name'){
     root.innerHTML=`<section class="pf-view">${profileStepDots(1)}<h1 class="pf-title">Create your profile</h1><p class="pf-subtitle">Give it a name — this is who's watching.</p><form onsubmit="continueProfileName(event)"><label class="pf-field"><span>Profile name</span><input class="pf-input" id="pf-new-name" maxlength="24" placeholder="Profile name" required></label><p class="pf-form-error" id="pf-error"></p><div class="pf-actions"><button class="pf-button" type="button" onclick="renderProfileHome()">Cancel</button><button class="pf-button primary" type="submit">Continue</button></div></form></section>`;setTimeout(()=>$('pf-new-name')?.focus(),30);return;
   }
   if(state.view==='avatar'){
     const chosen=PROFILE_AVATARS.find(item=>item.key===state.avatarKey)||PROFILE_AVATARS[0];
-    const choices=PROFILE_AVATARS.filter(item=>item.group===state.avatarGroup);
-    root.innerHTML=`<section class="pf-view"><div class="pf-tag">${profileAvatar({avatarKey:state.avatarKey,avatarColor:chosen.color})}<span>${profileEscape(state.draftName)}</span></div>${profileStepDots(2)}<h1 class="pf-title">Choose your look</h1><p class="pf-subtitle">Pick an avatar that feels like this profile.</p><div class="pf-avatar-picker"><div class="pf-category"><button class="${state.avatarGroup==='classic'?'active':''}" onclick="setProfileAvatarGroup('classic')">CLASSICS</button><button class="${state.avatarGroup==='shows'?'active':''}" onclick="setProfileAvatarGroup('shows')">FROM SHOWS &amp; MOVIES</button></div><div class="pf-avatar-grid">${choices.map(item=>`<button type="button" class="pf-avatar-choice ${state.avatarKey===item.key?'selected':''}" style="--av-color:${item.color}" aria-label="Choose avatar ${item.key}" onclick="selectProfileAvatar('${item.key}')">${item.src?`<img src="${item.src}" alt="">`:item.emoji}</button>`).join('')}</div></div><div class="pf-actions"><button class="pf-button" onclick="profileFlowState.view='name';renderProfileFlow()">Back</button><button class="pf-button primary" onclick="continueProfileAvatar()">Continue</button></div></section>`;return;
+    root.innerHTML=`<section class="pf-view pf-look-view">${profileStepDots(2)}<div class="pf-tag">${profileAvatar({avatarKey:state.avatarKey,avatarColor:chosen.color})}<span>${profileEscape(state.draftName)}</span></div><h1 class="pf-title">Choose your look</h1><p class="pf-subtitle">Pick an avatar that feels like this profile</p><div class="pf-look-scroll"><div class="pf-look-grid" role="listbox" aria-label="Choose an avatar">${PROFILE_AVATARS.map(item=>`<button type="button" role="option" aria-selected="${state.avatarKey===item.key}" class="pf-avatar-choice ${state.avatarKey===item.key?'selected':''}" style="--av-color:${item.color}" aria-label="Choose avatar ${item.key}" onclick="selectProfileAvatar('${item.key}')">${item.src?`<img src="${item.src}" alt="">`:item.emoji}</button>`).join('')}</div></div><div class="pf-actions pf-look-actions"><button class="pf-button pf-btn-back" onclick="profileFlowState.view='name';renderProfileFlow()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg><span>Back</span></button><button class="pf-button primary pf-btn-continue" onclick="continueProfileAvatar()">Continue</button></div></section>`;return;
   }
   if(state.view==='pin-new'){
-    root.innerHTML=`<section class="pf-view">${profileStepDots(3)}<h1 class="pf-title">Lock it with a PIN?</h1><p class="pf-subtitle">Only someone with this 4-digit PIN can use the profile. Leave it empty to skip — you can add one later.</p><form onsubmit="finishCreateProfile(event)"><div class="pf-pin-row"><input class="pf-pin-cell" id="pf-new-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="· · · ·"></div><p class="pf-form-error" id="pf-error"></p><div class="pf-actions"><button class="pf-button" type="button" onclick="profileFlowState.view='avatar';renderProfileFlow()">Back</button><button class="pf-button primary" type="submit">Create profile</button></div></form></section>`;return;
+    const chosen=PROFILE_AVATARS.find(item=>item.key===state.avatarKey)||PROFILE_AVATARS[0];
+    root.innerHTML=`<section class="pf-view pf-lock-view">${profileStepDots(3)}<div class="pf-tag">${profileAvatar({avatarKey:state.avatarKey,avatarColor:chosen.color})}<span>${profileEscape(state.draftName)}</span></div><h1 class="pf-title">Lock it with a PIN?</h1><p class="pf-subtitle">Only someone with this 4-digit PIN can use the profile. Leave it empty to skip — you can add one later.</p><div class="pf-newpin-row">${[0,1,2,3].map(idx=>`<input class="pf-newpin-cell" id="pf-new-pin-${idx}" data-pin-idx="${idx}" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]*" autocomplete="one-time-code" ${idx===0?'autofocus':''} oninput="handleNewPinInput(event,${idx})" onkeydown="handleNewPinKeydown(event,${idx})" onpaste="handleNewPinPaste(event)" aria-label="PIN digit ${idx+1}">`).join('')}</div><p class="pf-form-error" id="pf-error"></p><div class="pf-actions"><button class="pf-button pf-btn-back" type="button" onclick="profileFlowState.view='avatar';renderProfileFlow()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg><span>Back</span></button><button class="pf-button primary pf-btn-continue" type="button" onclick="finishCreateProfile()">Continue</button></div></section>`;setTimeout(()=>$('pf-new-pin-0')?.focus(),30);return;
   }
   if(state.view==='manage'){
     root.innerHTML=`<section class="pf-view pf-manage-view"><h1 class="pf-title">Who's watching?</h1><div class="pf-manage-grid">${state.profiles.map(item=>`<button class="pf-profile-tile pf-manage-tile" aria-label="Edit ${profileEscape(item.name)} profile" onclick="editProfile('${profileEscape(item.id)}')">${profileAvatar(item)}<span class="pf-manage-avatar-shade" aria-hidden="true"></span><span class="pf-manage-edit-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m14 5 5 5M4 20l4.5-1 11-11a2.1 2.1 0 0 0-3-3l-11 11L4 20Z"/></svg></span><span class="pf-profile-name">${item.locked?'<span class="pf-lock-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="10" width="15" height="11" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>':''}${profileEscape(item.name)}</span></button>`).join('')}</div><div class="pf-actions"><button class="pf-button pf-manage-done" onclick="renderProfileHome()">Done</button><button class="pf-button pf-manage-settings" onclick="openProfileSettings()">Settings</button></div></section>`;return;
   }
   if(state.view==='edit'){
-    const avatar=PROFILE_AVATARS.find(item=>item.key===profile?.avatarKey)||PROFILE_AVATARS[0];
-    root.innerHTML=`<section class="pf-view"><h1 class="pf-title">Edit profile</h1><p class="pf-subtitle">Manage the name, avatar, and profile PIN.</p><div class="pf-panel"><div class="pf-panel-card"><div class="pf-row">${profileAvatar(profile)}<div class="pf-row-copy"><strong>Profile name</strong><input class="pf-input" id="pf-edit-name" maxlength="24" value="${profileEscape(profile?.name||'')}"></div></div><div class="pf-row"><div class="pf-avatar-grid">${PROFILE_AVATARS.map(item=>`<button type="button" class="pf-avatar-choice ${profile?.avatarKey===item.key?'selected':''}" style="--av-color:${item.color};width:54px" aria-label="Choose ${item.key}" onclick="selectEditAvatar('${item.key}')">${item.src?`<img src="${item.src}" alt="">`:item.emoji}</button>`).join('')}</div></div><div class="pf-row"><div class="pf-row-copy"><strong>Profile PIN</strong><small>Require a 4-digit PIN to open this profile.</small></div><input class="pf-toggle" id="pf-lock-toggle" type="checkbox" ${profile?.locked?'checked':''} onchange="toggleProfilePinField()"></div><div class="pf-pin-set ${profile?.locked?'':'hidden'}" id="pf-pin-set"><input class="pf-input" id="pf-edit-pin" inputmode="numeric" maxlength="4" placeholder="${profile?.locked?'New 4-digit PIN':'Create 4-digit PIN'}"><button class="pf-button" onclick="saveProfilePin('${profileEscape(profile?.id||'')}')">Save PIN</button><button class="pf-button" onclick="removeProfilePin('${profileEscape(profile?.id||'')}')">Remove PIN</button></div></div></div><p class="pf-form-error" id="pf-error"></p><div class="pf-actions"><button class="pf-button" onclick="openProfileManage()">Back</button><button class="pf-button primary" onclick="saveEditedProfile('${profileEscape(profile?.id||'')}','${avatar.color}')">Save</button></div></section>`;return;
+    const activeKey=state.avatarKey||profile?.avatarKey||'classic-01';
+    const avatar=PROFILE_AVATARS.find(item=>item.key===activeKey)||PROFILE_AVATARS[0];
+    const previewProfile={...profile,avatarKey:avatar.key,avatarColor:avatar.color,avatarEmoji:avatar.emoji,avatarUrl:activeKey===profile?.avatarKey?(profile?.avatarUrl||avatar.src):avatar.src};
+    root.innerHTML=`<section class="pf-view pf-edit-view"><h1 class="pf-title">Edit profile</h1><div class="pf-panel"><div class="pf-panel-card"><div class="pf-edit-top"><div class="pf-edit-avatar-wrap">${profileAvatar(previewProfile)}<button type="button" class="pf-edit-avatar-btn" aria-label="Change profile avatar" onclick="toggleEditAvatarPicker()"><svg viewBox="0 0 24 24"><path d="m14 5 5 5M4 20l4.5-1 11-11a2.1 2.1 0 0 0-3-3l-11 11L4 20Z"/></svg></button></div><div class="pf-edit-name-col"><label class="pf-edit-label" for="pf-edit-name">PROFILE NAME</label><input class="pf-input" id="pf-edit-name" maxlength="24" value="${profileEscape(state.draftEditName!==undefined?state.draftEditName:(profile?.name||''))}"></div></div><div class="pf-edit-avatar-drawer ${state.showAvatarPicker?'':'hidden'}" id="pf-edit-avatar-drawer"><div class="pf-avatar-grid">${PROFILE_AVATARS.map(item=>`<button type="button" class="pf-avatar-choice ${activeKey===item.key?'selected':''}" style="--av-color:${item.color};width:54px" aria-label="Choose ${item.key}" onclick="selectEditAvatar('${item.key}')">${item.src?`<img src="${item.src}" alt="">`:item.emoji}</button>`).join('')}</div></div><div class="pf-edit-section pf-edit-pin-section"><div class="pf-edit-pin-row"><div class="pf-row-copy"><strong class="pf-edit-heading"><span class="pf-edit-heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4.5" y="10" width="15" height="11" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>Profile PIN</strong><small class="pf-edit-desc">Require a 4-digit PIN to open this profile. Others on<br>this account can't use it without the code.</small></div><input class="pf-toggle" id="pf-lock-toggle" type="checkbox" ${(profile?.locked||state.showPinInput)?'checked':''} onchange="toggleProfilePinField()"></div><div class="pf-pin-set ${state.showPinInput?'':'hidden'}" id="pf-pin-set"><input class="pf-input" id="pf-edit-pin" inputmode="numeric" maxlength="4" placeholder="${profile?.locked?'New 4-digit PIN':'Create 4-digit PIN'}"><button class="pf-button" type="button" onclick="saveProfilePin('${profileEscape(profile?.id||'')}')">Save PIN</button>${profile?.locked?`<button class="pf-button" type="button" onclick="removeProfilePin('${profileEscape(profile?.id||'')}')">Remove PIN</button>`:''}</div></div><div class="pf-edit-divider"></div><div class="pf-edit-section pf-edit-delete-section"><div class="pf-row-copy"><strong class="pf-edit-heading"><span class="pf-edit-heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></span>Delete</strong><small class="pf-edit-desc">This cannot be undone. History, continue watching, and the watchlist for<br>this profile will be permanently deleted.</small><button type="button" class="pf-delete-link" onclick="removeProfile('${profileEscape(profile?.id||'')}')">I understand and want to delete this profile</button></div></div></div><p class="pf-form-error" id="pf-error"></p><div class="pf-actions pf-edit-actions"><button class="pf-button pf-edit-back" type="button" onclick="openProfileManage()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg><span>Back</span></button><button class="pf-button primary pf-edit-save" type="button" onclick="saveEditedProfile('${profileEscape(profile?.id||'')}','${avatar.color}')">Save</button></div></div></section>`;return;
   }
   if(state.view==='settings'){
     root.innerHTML=`<section class="pf-view pf-settings-view"><h1 class="pf-title">Settings</h1><div class="pf-settings-block"><h2>Account security</h2><div class="pf-panel-card"><div class="pf-row"><div class="pf-row-copy"><strong>Change password</strong><small>Update the password for this account.</small></div><button class="pf-icon-button" onclick="togglePasswordForm()"><svg viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-4 4v3m-3 0h14v11H5z"/></svg></button></div><form id="pf-password-form" class="hidden" onsubmit="changeAccountPassword(event)"><label class="pf-field"><span>Current password</span><input class="pf-input" id="pf-current-password" type="password" required></label><label class="pf-field"><span>New password</span><input class="pf-input" id="pf-new-password" type="password" minlength="6" required></label><p class="pf-form-error" id="pf-password-error"></p><button class="pf-button primary" type="submit">Update password</button></form></div></div><div class="pf-settings-block"><h2>Devices</h2><p>Sessions signed in to your account</p><div class="pf-panel-card" id="pf-sessions">Loading sessions…</div></div><div class="pf-actions"><button class="pf-button" onclick="renderProfileHome()">Back</button></div></section>`;
@@ -1216,32 +1248,41 @@ window.continueProfileName=event=>{event.preventDefault();profileFlowState.draft
 window.setProfileAvatarGroup=group=>{profileFlowState.avatarGroup=group;renderProfileFlow();};
 window.selectProfileAvatar=key=>{profileFlowState.avatarKey=key;renderProfileFlow();};
 window.continueProfileAvatar=()=>{profileFlowState.view='pin-new';renderProfileFlow();};
-window.finishCreateProfile=async event=>{event.preventDefault();const avatar=PROFILE_AVATARS.find(item=>item.key===profileFlowState.avatarKey)||PROFILE_AVATARS[0],pin=$('pf-new-pin').value;try{const result=await api('POST','/profiles',{name:profileFlowState.draftName,avatarKey:avatar.key,avatarColor:avatar.color,avatarEmoji:avatar.emoji,pin});profileFlowState.profiles.push(result.profile);renderProfileHome();}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}};
-window.chooseProfile=profileId=>{const target=profileFlowState.profiles.find(item=>item.id===profileId);if(!target)return;profileFlowState.targetId=profileId;if(target.locked){profileFlowState.view='pin';renderProfileFlow();return;}activateProfile(profileId,'');};
-window.unlockProfile=async event=>{event.preventDefault();await activateProfile(profileFlowState.targetId,$('pf-enter-pin').value);};
-async function activateProfile(profileId,pin){try{const result=await api('POST',`/profiles/${encodeURIComponent(profileId)}/activate`,{pin});persist(result.user,result.token);profileFlowState.activeId=profileId;profileFlowState.view='choose';closeProfileSwitcher();goHome();if(S.socket){S.socket.disconnect();S.socket=null;}toast(`Switched to ${result.user.displayName}`);}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}}
+window.handleNewPinInput=(event,idx)=>{const input=event.target,digits=String(input.value||'').replace(/\D/g,''),err=$('pf-error');if(err)err.textContent='';if(!digits){input.value='';return;}if(digits.length>1){for(let i=0;i<4-idx&&i<digits.length;i++){const cell=$(`pf-new-pin-${idx+i}`);if(cell)cell.value=digits[i];}$(`pf-new-pin-${Math.min(3,idx+digits.length)}`)?.focus();}else{input.value=digits[0];if(idx<3)$(`pf-new-pin-${idx+1}`)?.focus();}const pin=[0,1,2,3].map(i=>$(`pf-new-pin-${i}`)?.value||'').join('');if(pin.length===4&&/^\d{4}$/.test(pin))finishCreateProfile();};
+window.handleNewPinKeydown=(event,idx)=>{if(event.key==='Backspace'){if(!event.target.value&&idx>0){event.preventDefault();const prev=$(`pf-new-pin-${idx-1}`);if(prev){prev.value='';prev.focus();}}}else if(event.key==='ArrowLeft'&&idx>0){event.preventDefault();$(`pf-new-pin-${idx-1}`)?.focus();}else if(event.key==='ArrowRight'&&idx<3){event.preventDefault();$(`pf-new-pin-${idx+1}`)?.focus();}else if(/^\d$/.test(event.key)&&event.target.value){event.target.value='';}};
+window.handleNewPinPaste=event=>{const pasted=(event.clipboardData||window.clipboardData)?.getData('text')||'',digits=pasted.replace(/\D/g,'').slice(0,4);if(!digits)return;event.preventDefault();for(let i=0;i<4;i++){const cell=$(`pf-new-pin-${i}`);if(cell)cell.value=digits[i]||'';}$(`pf-new-pin-${Math.min(3,Math.max(0,digits.length-1))}`)?.focus();if(digits.length===4)finishCreateProfile();};
+window.finishCreateProfile=async event=>{event?.preventDefault?.();if(profileFlowState.creating)return;const pin=[0,1,2,3].map(i=>$(`pf-new-pin-${i}`)?.value||'').join('');if(pin&&!/^\d{4}$/.test(pin)){const el=$('pf-error');if(el)el.textContent='Profile PIN must be exactly 4 digits';return;}profileFlowState.creating=true;const avatar=PROFILE_AVATARS.find(item=>item.key===profileFlowState.avatarKey)||PROFILE_AVATARS[0];try{const result=await api('POST','/profiles',{name:profileFlowState.draftName,avatarKey:avatar.key,avatarColor:avatar.color,avatarEmoji:avatar.emoji,pin});profileFlowState.profiles.push(result.profile);profileFlowState.creating=false;renderProfileHome();}catch(error){profileFlowState.creating=false;const el=$('pf-error');if(el)el.textContent=error.message;}};
+window.chooseProfile=profileId=>{const target=profileFlowState.profiles.find(item=>item.id===profileId);if(!target)return;profileFlowState.targetId=profileId;if(target.locked){profileFlowState.pinMode='activate';profileFlowState.view='pin';renderProfileFlow();return;}activateProfile(profileId,'');};
+window.cancelPinVerify=()=>{if(profileFlowState.pinMode==='edit')openProfileManage();else renderProfileHome();};
+window.handlePinDigitInput=(event,idx)=>{const input=event.target,digits=String(input.value||'').replace(/\D/g,''),err=$('pf-error');if(err)err.textContent='';if(!digits){input.value='';return;}if(digits.length>1){for(let i=0;i<4-idx&&i<digits.length;i++){const cell=$(`pf-pin-${idx+i}`);if(cell)cell.value=digits[i];}$(`pf-pin-${Math.min(3,idx+digits.length)}`)?.focus();}else{input.value=digits[0];if(idx<3)$(`pf-pin-${idx+1}`)?.focus();}const pin=[0,1,2,3].map(i=>$(`pf-pin-${i}`)?.value||'').join('');if(pin.length===4&&/^\d{4}$/.test(pin))verifyEnteredPin(pin);};
+window.handlePinDigitKeydown=(event,idx)=>{if(event.key==='Backspace'){if(!event.target.value&&idx>0){event.preventDefault();const prev=$(`pf-pin-${idx-1}`);if(prev){prev.value='';prev.focus();}}}else if(event.key==='ArrowLeft'&&idx>0){event.preventDefault();$(`pf-pin-${idx-1}`)?.focus();}else if(event.key==='ArrowRight'&&idx<3){event.preventDefault();$(`pf-pin-${idx+1}`)?.focus();}else if(/^\d$/.test(event.key)&&event.target.value){event.target.value='';}};
+window.handlePinDigitPaste=event=>{const pasted=(event.clipboardData||window.clipboardData)?.getData('text')||'',digits=pasted.replace(/\D/g,'').slice(0,4);if(!digits)return;event.preventDefault();for(let i=0;i<4;i++){const cell=$(`pf-pin-${i}`);if(cell)cell.value=digits[i]||'';}$(`pf-pin-${Math.min(3,Math.max(0,digits.length-1))}`)?.focus();if(digits.length===4)verifyEnteredPin(digits);};
+async function verifyEnteredPin(pin){if(profileFlowState.verifyingPin)return;profileFlowState.verifyingPin=true;try{if(profileFlowState.pinMode==='edit'){const targetId=profileFlowState.targetId;await api('POST',`/profiles/${encodeURIComponent(targetId)}/activate`,{pin});const target=profileFlowState.profiles.find(item=>item.id===targetId);profileFlowState.verifiedPin=pin;profileFlowState.avatarKey=target?.avatarKey||'classic-01';profileFlowState.draftEditName=undefined;profileFlowState.showAvatarPicker=false;profileFlowState.showPinInput=false;profileFlowState.view='edit';renderProfileFlow();}else{await activateProfile(profileFlowState.targetId,pin);}}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;[0,1,2,3].forEach(i=>{const c=$(`pf-pin-${i}`);if(c)c.value='';});$('pf-pin-0')?.focus();}finally{profileFlowState.verifyingPin=false;}}
+window.unlockProfile=async event=>{event.preventDefault();const pin=$('pf-enter-pin')?.value||[0,1,2,3].map(i=>$(`pf-pin-${i}`)?.value||'').join('');if(pin.length===4)await verifyEnteredPin(pin);};
+async function activateProfile(profileId,pin){try{const result=await api('POST',`/profiles/${encodeURIComponent(profileId)}/activate`,{pin});persist(result.user,result.token);profileFlowState.activeId=profileId;profileFlowState.view='choose';closeProfileSwitcher();goHome();if(S.socket){S.socket.disconnect();S.socket=null;}toast(`Switched to ${result.user.displayName}`);}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;[0,1,2,3].forEach(i=>{const c=$(`pf-pin-${i}`);if(c)c.value='';});$('pf-pin-0')?.focus();}}
 window.openProfileManage=()=>{profileFlowState.view='manage';renderProfileFlow();};
-window.editProfile=id=>{profileFlowState.targetId=id;profileFlowState.avatarKey=profileFlowState.profiles.find(item=>item.id===id)?.avatarKey||'classic-01';profileFlowState.view='edit';renderProfileFlow();};
-window.saveEditedProfile=async(id)=>{const avatar=PROFILE_AVATARS.find(item=>item.key===profileFlowState.avatarKey)||PROFILE_AVATARS.find(item=>item.key===profileFlowState.profiles.find(p=>p.id===id)?.avatarKey)||PROFILE_AVATARS[0];try{const result=await api('PATCH',`/profiles/${encodeURIComponent(id)}`,{name:$('pf-edit-name').value,avatarKey:profileFlowState.avatarKey||avatar.key,avatarColor:avatar.color,avatarEmoji:avatar.emoji});profileFlowState.profiles=profileFlowState.profiles.map(item=>item.id===id?result.profile:item);if(id===profileFlowState.activeId){const activated=await api('POST',`/profiles/${encodeURIComponent(id)}/activate`,{});persist(activated.user,activated.token);goHome();}openProfileManage();}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}};
-window.selectEditAvatar=key=>{profileFlowState.avatarKey=key;renderProfileFlow();};
-window.toggleProfilePinField=()=>{const checked=$('pf-lock-toggle').checked;$('pf-pin-set').classList.toggle('hidden',!checked);if(!checked)removeProfilePin(profileFlowState.targetId);};
-window.saveProfilePin=async id=>{const pin=$('pf-edit-pin').value;try{const result=await api('PATCH',`/profiles/${encodeURIComponent(id)}`,{pin});profileFlowState.profiles=profileFlowState.profiles.map(item=>item.id===id?result.profile:item);openProfileManage();}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}};
-window.removeProfilePin=async id=>{try{const result=await api('PATCH',`/profiles/${encodeURIComponent(id)}`,{pin:''});profileFlowState.profiles=profileFlowState.profiles.map(item=>item.id===id?result.profile:item);if(profileFlowState.view==='edit')renderProfileFlow();}catch(error){toast(error.message);}};
-window.removeProfile=async id=>{const profile=profileFlowState.profiles.find(item=>item.id===id);if(!profile||!confirm(`Delete the ${profile.name} profile?`))return;try{const result=await api('DELETE',`/profiles/${encodeURIComponent(id)}`);profileFlowState.profiles=result.profiles;profileFlowState.activeId=result.activeProfileId;if(result.token){persist(result.user,result.token);goHome();}openProfileManage();}catch(error){toast(error.message);}};
+window.editProfile=id=>{const target=profileFlowState.profiles.find(item=>item.id===id);if(!target)return;profileFlowState.targetId=id;profileFlowState.avatarKey=target.avatarKey||'classic-01';profileFlowState.draftEditName=undefined;profileFlowState.showAvatarPicker=false;profileFlowState.showPinInput=false;if(target.locked){profileFlowState.pinMode='edit';profileFlowState.view='pin';renderProfileFlow();return;}profileFlowState.view='edit';renderProfileFlow();};
+window.toggleEditAvatarPicker=()=>{profileFlowState.showAvatarPicker=!profileFlowState.showAvatarPicker;$('pf-edit-avatar-drawer')?.classList.toggle('hidden',!profileFlowState.showAvatarPicker);};
+window.saveEditedProfile=async(id)=>{const avatar=PROFILE_AVATARS.find(item=>item.key===profileFlowState.avatarKey)||PROFILE_AVATARS.find(item=>item.key===profileFlowState.profiles.find(p=>p.id===id)?.avatarKey)||PROFILE_AVATARS[0];const payload={name:$('pf-edit-name').value,avatarKey:profileFlowState.avatarKey||avatar.key,avatarColor:avatar.color,avatarEmoji:avatar.emoji};const newPin=$('pf-edit-pin')?.value?.trim();if(newPin)payload.pin=newPin;try{const result=await api('PATCH',`/profiles/${encodeURIComponent(id)}`,payload);profileFlowState.profiles=profileFlowState.profiles.map(item=>item.id===id?result.profile:item);if(id===profileFlowState.activeId){const me=await api('GET','/auth/me');if(me?.user)persist(me.user,S.token);goHome();}openProfileManage();}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}};
+window.selectEditAvatar=key=>{if($('pf-edit-name'))profileFlowState.draftEditName=$('pf-edit-name').value;profileFlowState.avatarKey=key;renderProfileFlow();};
+window.toggleProfilePinField=()=>{const checked=$('pf-lock-toggle').checked;profileFlowState.showPinInput=checked;$('pf-pin-set')?.classList.toggle('hidden',!checked);if(!checked)removeProfilePin(profileFlowState.targetId);else setTimeout(()=>$('pf-edit-pin')?.focus(),30);};
+window.saveProfilePin=async id=>{const pin=$('pf-edit-pin').value;try{const result=await api('PATCH',`/profiles/${encodeURIComponent(id)}`,{pin});profileFlowState.profiles=profileFlowState.profiles.map(item=>item.id===id?result.profile:item);profileFlowState.showPinInput=false;openProfileManage();}catch(error){const el=$('pf-error');if(el)el.textContent=error.message;}};
+window.removeProfilePin=async id=>{try{const result=await api('PATCH',`/profiles/${encodeURIComponent(id)}`,{pin:''});profileFlowState.profiles=profileFlowState.profiles.map(item=>item.id===id?result.profile:item);profileFlowState.showPinInput=false;if(profileFlowState.view==='edit'){if($('pf-edit-name'))profileFlowState.draftEditName=$('pf-edit-name').value;renderProfileFlow();}}catch(error){toast(error.message);}};
+window.removeProfile=async id=>{const profile=profileFlowState.profiles.find(item=>item.id===id);if(!profile)return;try{const result=await api('DELETE',`/profiles/${encodeURIComponent(id)}`);profileFlowState.profiles=result.profiles;profileFlowState.activeId=result.activeProfileId;if(result.token){persist(result.user,result.token);goHome();}openProfileManage();}catch(error){toast(error.message);}};
 window.openProfileSettings=()=>{profileFlowState.view='settings';renderProfileFlow();};
 window.togglePasswordForm=()=>$('pf-password-form').classList.toggle('hidden');
 window.changeAccountPassword=async event=>{event.preventDefault();const error=$('pf-password-error');error.textContent='';try{await api('POST','/account/password',{currentPassword:$('pf-current-password').value,newPassword:$('pf-new-password').value});$('pf-password-form').reset();error.textContent='Password updated. Other signed-in devices were signed out.';await loadProfileSessions();}catch(ex){error.textContent=ex.message;}};
 async function loadProfileSessions(){const root=$('pf-sessions');if(!root)return;try{const result=await api('GET','/account/sessions');profileFlowState.sessions=result.sessions||[];root.innerHTML=profileFlowState.sessions.length?profileFlowState.sessions.map(session=>`<div class="pf-row"><span class="pf-icon-button"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg></span><div class="pf-row-copy"><strong>${profileEscape(deviceLabel(session.userAgent))}${session.current?' · This device':''}</strong><small class="pf-session-meta">Last active ${new Date(session.lastActive).toLocaleString()}</small></div><button class="pf-icon-button" title="Sign out this device" onclick="revokeProfileSession('${profileEscape(session.id)}',${session.current})"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>`).join(''):'<p class="pf-row-copy">No active sessions found.</p>';}catch(error){root.textContent=error.message;}}
 function deviceLabel(agent){if(/Windows/i.test(agent))return 'Browser · Windows';if(/Mac OS|Macintosh/i.test(agent))return 'Browser · Mac';if(/Android/i.test(agent))return 'Browser · Android';if(/iPhone|iPad/i.test(agent))return 'Browser · iOS';return 'Browser · Device';}
 window.revokeProfileSession=async(id,current)=>{try{await api('DELETE',`/account/sessions/${encodeURIComponent(id)}`);if(current){closeProfileSwitcher();signOut();return;}await loadProfileSessions();}catch(error){toast(error.message);}};
-window.openProfileModal = () => { if(!S.user)return;closeQuickAlert();closeProfileMenu();$('pf-nm').value=S.user.displayName||'';$('pf-bio').value=S.user.bio||'';$('pf-pw').value='';$('pf-err').textContent='';S.pendingClr=null;S.pendingAvFile=null;renderProfAv($('prof-av'),S.user);$('m-prof').classList.remove('hidden'); };
+window.openProfileModal = async () => { if(!S.user)return;closeQuickAlert();closeProfileMenu();$('pf-nm').value=S.user.displayName||'';$('pf-username').value=S.user.username||'';$('pf-email').value='Loading…';$('pf-err').textContent='';S.pendingAvFile=null;renderProfAv($('prof-av'),S.user);$('m-prof').classList.remove('hidden');try{const account=await api('GET','/auth/account');if(!$('m-prof').classList.contains('hidden')){$('pf-username').value=account.username||S.user.username||'';$('pf-email').value=account.email||'Not provided for this account';}}catch{$('pf-email').value=S.user.email||'Not provided for this account';} };
 window.closeModal = id => {
   $(id).classList.add('hidden');
   if (id === 'm-library' && $('s-home')?.classList.contains('active')) openHomeTab('home');
   if (id === 'm-chat-settings') schedulePlayerUiHide();
 };
 
-// ── Create/Join ───────────────────────────────────────────────────────────────
+// â”€â”€ Create/Join â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.doCreate = async () => {
   const name=$('c-name').value.trim()||'Movie Night 🎬',isPrivate=$('c-priv').checked,password=$('c-pw').value.trim(),e=$('c-err');e.textContent='';
   if(isPrivate&&!password){e.textContent='Enter a password';return;}
@@ -1260,7 +1301,7 @@ window.doJoin = async () => {
   }
 };
 
-// ── Enter room ────────────────────────────────────────────────────────────────
+// â”€â”€ Enter room â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function enterRoom(room, password) {
   S.room=room; S.isOwner=room.isOwner; S.msgIds.clear();
   S.sidebarOpen=true;
@@ -1275,7 +1316,7 @@ function enterRoom(room, password) {
   goRoom(); updateRoomUI(room);
 
   // Reset UI
-  $('chat-box').innerHTML='<div class="chat-mt"><div class="cmt-icon">💬</div><p>Say hello!</p></div>';
+  $('chat-box').innerHTML='<div class="chat-mt"><div class="cmt-icon">&#128172;</div><p>Say hello!</p></div>';
   $('fc-msgs').innerHTML='';
   setSidebar(true); sbTab('chat');
   buildEmojiStrips();
@@ -1285,7 +1326,7 @@ function enterRoom(room, password) {
   connectSocket(room, password);
 }
 
-// ── Socket ────────────────────────────────────────────────────────────────────
+// â”€â”€ Socket â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function connectSocket(room, password) {
   if(S.socket) S.socket.disconnect();
   S.socket = io({ auth:{token:S.token}, reconnection:true, reconnectionDelay:1000, reconnectionAttempts:20 });
@@ -1340,7 +1381,7 @@ function connectSocket(room, password) {
     }
   });
 
-  // ── BUG FIX #2/#3: Sync ───────────────────────────────────────────────────
+  // â”€â”€ BUG FIX #2/#3: Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   S.socket.on('sync_init',({playing,time})=>{
     if(S.isOwner) return;
     applySync(playing,time,false);
@@ -1353,7 +1394,7 @@ function connectSocket(room, password) {
     setSyncStatus('synced','Synced');
   });
 
-  // ── BUG FIX #1: video_changed now fires for ALL users from server ──────────
+  // â”€â”€ BUG FIX #1: video_changed now fires for ALL users from server â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Client only loads if URL changed (dedup)
   S.socket.on('video_changed',({video})=>{
     if(video.url !== S.vid.url) {
@@ -1390,7 +1431,7 @@ function connectSocket(room, password) {
   S.socket.on('rtc_hangup', ()          =>handleRtcHangup());
 }
 
-// ── Room UI update — BUG FIX #4 #5 ──────────────────────────────────────────
+// â”€â”€ Room UI update — BUG FIX #4 #5 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showPartnerUploadProgress(payload) {
   if (!payload || payload.user?.id === S.user?.id) return;
   const prog = $('partner-up-prog');
@@ -1454,7 +1495,7 @@ function updateRoomUI(room) {
 function renderVwAv(el,u){el.style.background=u.avatarColor;el.innerHTML=u.avatarUrl?`<img src="${u.avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:u.avatar;}
 function renderProfAv(el,u){el.style.background=u.avatarColor;el.innerHTML=u.avatarUrl?`<img src="${u.avatarUrl}" alt="">`:u.avatar;}
 
-// ── BUG FIX #8: Partner mute visibility ──────────────────────────────────────
+// â”€â”€ BUG FIX #8: Partner mute visibility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function setPartnerMuteUI(user, muted) {
   const isOwnerUser = S.room?.owner?.id === user.id;
   // Viewer bar mute icon
@@ -1468,7 +1509,7 @@ function setPartnerMuteUI(user, muted) {
   }
 }
 
-// ── Sidebar toggle ────────────────────────────────────────────────────────────
+// â”€â”€ Sidebar toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.toggleSidebar = () => setSidebar(!S.sidebarOpen);
 function setSidebar(open) {
   S.sidebarOpen=open;
@@ -1517,7 +1558,7 @@ window.transferOwnership = () => {
   toast('Ownership transferred!');
 };
 
-// ── BUG FIX #1: Video URL resolver ───────────────────────────────────────────
+// â”€â”€ BUG FIX #1: Video URL resolver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function resolveUrl(raw) {
   if(!raw||!raw.trim()) return null;
   raw=raw.trim();
@@ -1628,7 +1669,7 @@ function updateSyncMeta(){
 
   const meta=document.createElement('span');
   meta.className='ss-meta';
-  meta.textContent=parts.join(' • ');
+  meta.textContent=parts.join(' · ');
   right.appendChild(meta);
 
   if(S.isOwner&&isGenericEmbed()){
@@ -1759,7 +1800,7 @@ window.doLoadVid = () => {
   toast('Loading for both users… 🎬');
 };
 
-// ── Load video ────────────────────────────────────────────────────────────────
+// â”€â”€ Load video â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function loadVidUrl(url,title,meta,type) {
 
   setPlayerConnecting(false);
@@ -1822,7 +1863,7 @@ function loadVidUrl(url,title,meta,type) {
   startSyncTimers();
 }
 
-// ── SYNC ENGINE — BUG FIX #2 #3 ──────────────────────────────────────────────
+// â”€â”€ SYNC ENGINE — BUG FIX #2 #3 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Owner maintains a JS clock as source of truth for iframe players.
 // Heartbeat every 2s broadcasts current time+playing to all guests.
 // This works regardless of whether the iframe sends postMessage events.
@@ -1972,7 +2013,7 @@ function setSyncStatus(state,text) {
   setSyncFeedback(state,text);
 }
 
-// ── CHAT ──────────────────────────────────────────────────────────────────────
+// â”€â”€ CHAT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.sendChat = () => doSend($('chat-inp'));
 window.fcSend   = () => doSend($('fc-inp'));
 function doSend(inp) {
@@ -2068,7 +2109,7 @@ function sysMsg(text){
 }
 function scrollChat(){const b=$('chat-box');if(b)b.scrollTop=b.scrollHeight;}
 
-// ── EMOJI ─────────────────────────────────────────────────────────────────────
+// â”€â”€ EMOJI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.sendEmoji=emoji=>{if(!S.socket||!S.room)return;S.socket.emit('emoji_reaction',{roomId:S.room.id,emoji});spawnEmoji(emoji);};
 function getEmojiFloatRoot() {
   if (document.fullscreenElement === $('room-wrap')) return $('room-efloat') || $('efloat');
@@ -2095,7 +2136,7 @@ function spawnEmoji(emoji){
   root.appendChild(el);setTimeout(()=>el.remove(),dur*1000+180);
 }
 
-// ── MEDIA UPLOAD ──────────────────────────────────────────────────────────────
+// â”€â”€ MEDIA UPLOAD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.uploadVid=async input=>{
   if(!input.files?.length||!S.room)return;
   await uploadLibraryMedia(input, { prog:'up-prog', fill:'up-fill', label:'up-lbl2', success:`Saved to library: ${input.files[0].name}` });
@@ -2177,7 +2218,7 @@ function renderMediaList(vs){
   if (S.room) S.room.uploadedVideos = Array.isArray(vs) ? vs : [];
   list.innerHTML='';
   if(!vs?.length){
-    list.innerHTML='<div class="media-mt"><div style="font-size:2rem;opacity:.2">📁</div><p>No saved media yet</p></div>';
+    list.innerHTML='<div class="media-mt"><div style="font-size:2rem;opacity:.2">&#128193;</div><p>No saved media yet</p></div>';
     return;
   }
   vs.forEach((item, idx)=>list.appendChild(makeMediaItem(item, { editable:item.ownerId===S.user?.id, showOwner:true, index:idx })));
@@ -2294,16 +2335,13 @@ function playMediaItem(v){
 }
 function fmtSz(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';if(b<1073741824)return(b/1048576).toFixed(1)+'MB';return(b/1073741824).toFixed(2)+'GB';}
 
-// ── PROFILE ───────────────────────────────────────────────────────────────────
-window.pickClr=c=>{S.pendingClr=c;const el=$('prof-av');el.style.background=c;el.textContent=S.user.avatar;};
+// â”€â”€ PROFILE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.prevAvatar=input=>{if(!input.files?.length)return;S.pendingAvFile=input.files[0];$('prof-av').innerHTML=`<img src="${URL.createObjectURL(S.pendingAvFile)}" style="width:100%;height:100%;object-fit:cover">`;};
 window.saveProfile=async()=>{
   const e=$('pf-err');e.textContent='';
   try{
     const form=new FormData();
-    form.append('displayName',$('pf-nm').value.trim());form.append('bio',$('pf-bio').value.trim());
-    if($('pf-pw').value.trim())form.append('password',$('pf-pw').value.trim());
-    if(S.pendingClr)form.append('avatarColor',S.pendingClr);
+    form.append('displayName',$('pf-nm').value.trim());
     if(S.pendingAvFile)form.append('avatar',S.pendingAvFile);
     const r=await fetch('/api/auth/profile',{method:'PATCH',headers:{Authorization:'Bearer '+S.token},body:form});
     const d=await r.json();if(!r.ok){e.textContent=d.error;return;}
@@ -2311,7 +2349,7 @@ window.saveProfile=async()=>{
   }catch(ex){e.textContent=ex.message;}
 };
 
-// ── WEBRTC — BUG FIX #7 (stability, timeout, state machine) ──────────────────
+// â”€â”€ WEBRTC — BUG FIX #7 (stability, timeout, state machine) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const RTC_CFG={iceServers:[
   {urls:'stun:stun.l.google.com:19302'},
   {urls:'stun:stun1.l.google.com:19302'},
@@ -2636,7 +2674,7 @@ function endCall(){
 }
 window.endCall=endCall;
 
-// ── CHAT VISIBILITY TOGGLE (feature #4) ───────────────────────────────────────
+// â”€â”€ CHAT VISIBILITY TOGGLE (feature #4) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function updateChatUnreadBadge() {
   const n = S.chatUnread;
   ['chat-unread-badge','legacy-chat-unread-badge'].forEach(id => {
@@ -2666,7 +2704,7 @@ window.toggleChatVisibility = () => {
   }
 };
 
-// ── CHAT TEMPLATES (feature #6) ───────────────────────────────────────────────
+// â”€â”€ CHAT TEMPLATES (feature #6) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function saveTemplates() {
   saveChatPrefs();
 }
@@ -2690,7 +2728,7 @@ function renderTemplatePanel() {
       <span class="tpl-text" title="${esc(tpl)}">${esc(tpl)}</span>
       <div class="tpl-btns">
         <button class="tpl-use" onclick="useTpl(${idx})" title="Use">▶</button>
-        <button class="tpl-del" onclick="deleteTpl(${idx})" title="Delete">✕</button>
+        <button class="tpl-del" onclick="deleteTpl(${idx})" title="Delete">×</button>
       </div>`;
     list.appendChild(row);
   });
@@ -2727,7 +2765,7 @@ window.deleteTpl = idx => {
   renderTemplatePanel();
 };
 
-// ── FULLSCREEN (feature #5) ────────────────────────────────────────────────────
+// â”€â”€ FULLSCREEN (feature #5) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.toggleFullscreen = () => {
   const target = $('room-wrap') || document.documentElement;
   if (!document.fullscreenElement) {
@@ -2751,7 +2789,7 @@ document.addEventListener('fullscreenchange', () => {
   if (isFs) schedulePlayerUiHide();
 });
 
-// ── Utils ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Utils â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderTemplatePanel() {
   renderTemplateSettings();
 }

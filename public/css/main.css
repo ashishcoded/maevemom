@@ -36,6 +36,8 @@ img{display:block;max-width:100%}
 /* Twemoji */
 img.emoji{width:1.15em;height:1.15em;vertical-align:-.15em;display:inline-block}
 img.emoji-ios{display:block;user-select:none;-webkit-user-drag:none;filter:drop-shadow(0 10px 18px rgba(0,0,0,.28))}
+.emoji-fallback.emoji-reaction-btn:not([hidden]){display:block;width:24px;height:24px;font-family:"Apple Color Emoji","Segoe UI Emoji",sans-serif;font-size:20px;line-height:24px;text-align:center}
+.emoji-fallback.emoji-reaction-float:not([hidden]){display:block;width:44px;height:44px;font-family:"Apple Color Emoji","Segoe UI Emoji",sans-serif;font-size:38px;line-height:44px;text-align:center}
 
 /* ═══ AUTH ═══════════════════════════════════════════════════════════════════ */
 #s-auth{display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -430,9 +432,6 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 .prof-av-wrap{text-align:center;margin-bottom:1.2rem}
 .prof-av{width:70px;height:70px;border-radius:50%;margin:0 auto .65rem;display:flex;align-items:center;justify-content:center;font-size:1.7rem;font-weight:700;color:#fff;font-family:var(--f-cine);letter-spacing:.06em;border:3px solid var(--bg4);overflow:hidden}
 .av-up-lbl{display:inline-block;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r);padding:.32rem .85rem;font-size:.72rem;color:var(--t2);cursor:pointer;transition:var(--tr)}.av-up-lbl:hover{background:var(--bg4);color:var(--t)}
-.clr-lbl{font-size:.66rem;color:var(--t3);margin:.65rem 0 .4rem}
-.clr-row{display:flex;justify-content:center;gap:8px}
-.clr{width:22px;height:22px;border-radius:50%;border:2px solid transparent;transition:var(--tr);flex-shrink:0}.clr:hover{transform:scale(1.25);border-color:#fff}
 
 /* Toast */
 .toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(8px);background:var(--bg4);border:1px solid var(--bdr2);border-radius:10px;padding:.55rem 1.2rem;font-size:.8rem;opacity:0;pointer-events:none;transition:all .26s var(--ease);z-index:9999;white-space:nowrap}
@@ -1683,25 +1682,25 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 @media(max-width:700px){#s-home .quick-alert-panel{position:fixed;top:74px;right:12px;width:min(350px,calc(100vw - 24px));max-height:calc(100vh - 90px);transform:translateY(-5px) scale(.985);transform-origin:top right}#s-home .quick-alert-panel.is-open{transform:none}}
 
 /* Full-screen profile chooser and account settings */
-.profile-flow{position:fixed;inset:0;z-index:15000;display:none;overflow:auto;background:radial-gradient(ellipse at 50% 35%,rgba(47,15,24,.22),transparent 48%),#050609;color:#f5f6fa;font-family:var(--hn-font,Arial,sans-serif)}
+.profile-flow{position:fixed;inset:0;z-index:15000;display:none;overflow:auto;background:radial-gradient(ellipse 70% 45% at 50% 18%,rgba(90,18,28,.55),rgba(55,12,20,.18) 55%,transparent 75%),radial-gradient(ellipse at 50% 0%,rgba(40,8,14,.4),transparent 50%),#050609;color:#f5f6fa;font-family:var(--hn-font,Arial,sans-serif)}
 .profile-flow.is-open{display:block}
 .pf-shell{position:relative;display:flex;min-height:100%;justify-content:center;align-items:center;padding:70px 24px 42px;box-sizing:border-box}
 .pf-close{position:fixed;top:24px;right:30px;z-index:2;width:42px;height:42px;border:1px solid rgba(255,255,255,.1);border-radius:50%;background:rgba(255,255,255,.04);color:#d8dbe3;font-size:25px;cursor:pointer}
 .pf-view{width:min(100%,760px);margin:auto;text-align:center;animation:pf-enter .18s ease both}
 @keyframes pf-enter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
-.pf-title{margin:0;color:#f5f6fa;font-size:clamp(30px,4vw,42px);font-weight:750;letter-spacing:-.035em}
+.pf-title{margin:0;color:#f5f6fa;font-size:clamp(26px,3.2vw,36px);font-weight:750;letter-spacing:-.03em}
 .pf-subtitle{margin:11px 0 34px;color:#9299a8;font-size:15px;line-height:1.5}
-.pf-profile-grid{display:flex;justify-content:center;align-items:flex-start;gap:34px;flex-wrap:wrap;margin:0 auto 56px}
-.pf-profile-tile{width:165px;padding:0;border:0;background:transparent;color:#a5adbc;font:inherit;cursor:pointer;transition:transform .18s ease,color .18s ease}
+.pf-profile-grid{display:flex;justify-content:center;align-items:flex-start;gap:28px;flex-wrap:wrap;margin:38px auto 40px}
+.pf-profile-tile{width:110px;padding:0;border:0;background:transparent;color:#a5adbc;font:inherit;cursor:pointer;transition:transform .18s ease,color .18s ease}
 .pf-profile-tile:hover{transform:translateY(-4px);color:#fff}
-.pf-avatar{position:relative;display:grid;place-items:center;width:158px;height:158px;margin:0 auto 14px;overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:50%;background:radial-gradient(circle at 32% 25%,rgba(255,255,255,.45),transparent 29%),linear-gradient(145deg,var(--av-color,#54616c),#15191f 85%);box-shadow:inset -9px -13px 24px rgba(0,0,0,.4),inset 2px 3px 9px rgba(255,255,255,.15),0 9px 24px rgba(0,0,0,.28);font-size:74px;line-height:1;transition:transform .2s ease,box-shadow .2s ease}
+.pf-avatar{position:relative;display:grid;place-items:center;width:100px;height:100px;margin:0 auto 12px;overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:50%;background:radial-gradient(circle at 32% 25%,rgba(255,255,255,.45),transparent 29%),linear-gradient(145deg,var(--av-color,#54616c),#15191f 85%);box-shadow:inset -5px -8px 16px rgba(0,0,0,.4),inset 1px 2px 6px rgba(255,255,255,.15),0 6px 16px rgba(0,0,0,.28);font-size:46px;line-height:1;transition:transform .2s ease,box-shadow .2s ease}
 .pf-profile-tile:hover .pf-avatar{transform:scale(1.045);box-shadow:inset -9px -13px 24px rgba(0,0,0,.38),inset 2px 3px 9px rgba(255,255,255,.2),0 13px 35px rgba(0,0,0,.42)}
 .pf-avatar img{width:100%;height:100%;object-fit:cover}
-.pf-profile-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px}
-.pf-lock-mark{margin-right:7px;color:#7f8794;font-size:14px}
-.pf-add-tile .pf-avatar{border-style:dashed;background:rgba(255,255,255,.025);box-shadow:none;color:#6b7280;font-size:38px}
+.pf-profile-name{display:flex;align-items:center;justify-content:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#a5adbc}
+.pf-lock-mark{display:inline-flex;align-items:center;margin-right:5px;color:#7f8794;flex-shrink:0}.pf-lock-mark svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.pf-add-tile .pf-avatar{border-style:dashed;border-color:rgba(255,255,255,.22);background:rgba(255,255,255,.04);box-shadow:none;color:#6b7280;font-size:26px}
 .pf-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
-.pf-button{min-height:46px;padding:0 25px;border:1px solid rgba(255,255,255,.12);border-radius:24px;background:rgba(255,255,255,.025);color:#9ca5b5;font:500 15px var(--hn-font,Arial,sans-serif);cursor:pointer;transition:background .16s ease,color .16s ease,border-color .16s ease}
+.pf-button{min-height:38px;padding:0 20px;border:1px solid rgba(255,255,255,.18);border-radius:20px;background:rgba(255,255,255,.04);color:#9ca5b5;font:500 13px var(--hn-font,Arial,sans-serif);cursor:pointer;transition:background .16s ease,color .16s ease,border-color .16s ease}
 .pf-button:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.23);color:#fff}
 .pf-button.primary{border-color:#f3f4f6;background:#f3f4f6;color:#111319}
 .pf-button.primary:hover{background:#fff}
@@ -1719,15 +1718,11 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 .pf-input:focus{border-color:rgba(255,255,255,.54)}
 .pf-pin-row{display:flex;justify-content:center;gap:12px;margin:42px auto 78px}
 .pf-pin-cell{width:64px;height:76px;border:1px solid rgba(255,255,255,.13);border-radius:15px;background:rgba(255,255,255,.025);color:#fff;text-align:center;font-size:26px}
-.pf-avatar-picker{width:min(100%,860px);margin:0 auto 32px}
 .pf-avatar-grid{display:grid;grid-template-columns:repeat(6,minmax(65px,1fr));gap:15px;max-height:330px;overflow:auto;padding:14px 8px 20px}
 .pf-avatar-choice{display:grid;place-items:center;aspect-ratio:1;border:2px solid transparent;border-radius:50%;background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.4),transparent 30%),linear-gradient(145deg,var(--av-color),#16181d);box-shadow:inset -6px -8px 14px rgba(0,0,0,.36),0 5px 14px rgba(0,0,0,.22);font-size:clamp(29px,4vw,48px);cursor:pointer;transition:transform .15s ease,border-color .15s ease}
 .pf-avatar-choice:hover{transform:scale(1.07)}
 .pf-avatar-choice img{display:block;width:100%;height:100%;border-radius:50%;object-fit:cover}
 .pf-avatar-choice.selected{border-color:#f4f5f7;box-shadow:0 0 0 3px rgba(255,255,255,.12),inset -6px -8px 14px rgba(0,0,0,.36)}
-.pf-category{display:flex;gap:9px;margin:0 0 12px}
-.pf-category button{padding:8px 12px;border:0;border-radius:8px;background:transparent;color:#777f8c;font:700 11px var(--hn-font,Arial,sans-serif);letter-spacing:.1em;cursor:pointer}
-.pf-category button.active{background:rgba(255,255,255,.08);color:#ddd}
 .pf-panel{width:min(100%,720px);margin:0 auto 24px;text-align:left}
 .pf-panel-card{padding:20px 22px;border:1px solid rgba(255,255,255,.1);border-radius:17px;background:linear-gradient(145deg,rgba(30,19,24,.6),rgba(13,15,19,.7));text-align:left}
 .pf-row{display:flex;align-items:center;gap:15px;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.07)}
@@ -1851,7 +1846,8 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 
 .profile-flow{
   background:
-    radial-gradient(ellipse 48% 42% at 50% 6%,rgba(47,15,24,.20),transparent 68%),
+    radial-gradient(ellipse 70% 45% at 50% 18%,rgba(90,18,28,.55),rgba(55,12,20,.18) 55%,transparent 75%),
+    radial-gradient(ellipse at 50% 0%,rgba(40,8,14,.4),transparent 50%),
     #050609;
 }
 
@@ -1863,36 +1859,36 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 
 .pf-view{
   width:min(100%,760px);
-  transform:translateY(-64px);
+  transform:none;
 }
 
 .pf-title{
-  margin:0 0 58px;
+  margin:0 0 40px;
   color:#f5f5f7;
   font-family:Arial,Helvetica,sans-serif;
-  font-size:42px;
+  font-size:clamp(26px,3.2vw,36px);
   font-weight:700;
-  line-height:45px;
-  letter-spacing:-1.5px;
+  line-height:1.1;
+  letter-spacing:-.03em;
 }
 
 .pf-subtitle{
   display:none;
 }
 
-/* Two 152px circles, 39px visual gap — matches reference */
+/* Two profiles, 28px gap — matches reference */
 .pf-profile-grid{
   display:flex;
   justify-content:center;
   align-items:flex-start;
-  gap:39px;
-  flex-wrap:nowrap;
-  margin:0 auto 58px;
+  gap:28px;
+  flex-wrap:wrap;
+  margin:0 auto 36px;
 }
 
 .pf-profile-tile{
-  width:152px;
-  min-width:152px;
+  width:100px;
+  min-width:100px;
   padding:0;
   border:0;
   background:transparent;
@@ -1908,9 +1904,9 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 
 /* Exact reference circle */
 .pf-avatar{
-  width:152px;
-  height:152px;
-  margin:0 auto 17px;
+  width:100px;
+  height:100px;
+  margin:0 auto 12px;
   box-sizing:border-box;
   overflow:hidden;
   border:1px solid rgba(255,255,255,.18);
@@ -1922,7 +1918,7 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
     inset -8px -12px 23px rgba(0,0,0,.42),
     inset 2px 3px 9px rgba(255,255,255,.14),
     0 8px 24px rgba(0,0,0,.28);
-  font-size:72px;
+  font-size:46px;
   line-height:1;
 }
 
@@ -1943,36 +1939,47 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 
 /* Name + lock: lock sits immediately before the name */
 .pf-profile-name{
-  display:block;
+  display:flex;
+  align-items:center;
+  justify-content:center;
   width:100%;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
   color:#9da5b4;
   font-family:Arial,Helvetica,sans-serif;
-  font-size:16px;
+  font-size:13px;
   font-weight:400;
-  line-height:20px;
+  line-height:17px;
   letter-spacing:0;
   text-align:center;
 }
 
 .pf-lock-mark{
-  display:inline-block;
-  margin:0 6px 0 0;
+  display:inline-flex;
+  align-items:center;
+  margin:0 5px 0 0;
   color:#858c98;
-  font-size:13px;
-  line-height:1;
-  vertical-align:-1px;
+  flex-shrink:0;
+}
+.pf-lock-mark svg{
+  display:block;
+  width:11px;
+  height:11px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2.2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
 
-/* Add Profile — same 152px circle and exact position */
+/* Add Profile — same circle, dashed border */
 .pf-add-tile .pf-avatar{
-  border:1px dashed rgba(255,255,255,.18);
-  background:rgba(255,255,255,.012);
+  border:1px dashed rgba(255,255,255,.22);
+  background:rgba(255,255,255,.04);
   box-shadow:none;
   color:#727987;
-  font-size:38px;
+  font-size:26px;
   font-weight:300;
 }
 
@@ -1991,15 +1998,15 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 }
 
 .pf-button{
-  min-height:48px;
-  padding:0 27px;
+  min-height:38px;
+  padding:0 20px;
   box-sizing:border-box;
-  border:1px solid rgba(255,255,255,.12);
-  border-radius:25px;
-  background:rgba(255,255,255,.018);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:20px;
+  background:rgba(255,255,255,.04);
   color:#9ba4b4;
   font-family:Arial,Helvetica,sans-serif;
-  font-size:16px;
+  font-size:13px;
   font-weight:400;
   line-height:1;
   box-shadow:none;
@@ -2041,41 +2048,101 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 
 /* Chooser sizing follows the supplied reference while keeping other profile screens intact. */
 .pf-chooser-view .pf-title{
-  margin-bottom:60px;
-  font-size:48px;
-  line-height:1.08;
-  letter-spacing:-1.5px;
+  margin-bottom:40px;
+  font-size:clamp(26px,3.2vw,36px);
+  line-height:1.1;
+  letter-spacing:-.03em;
 }
 .pf-chooser-view{transform:none}
-.pf-chooser-view .pf-profile-grid{gap:48px;margin-bottom:54px}
-.pf-chooser-view .pf-avatar{width:152px;height:152px;margin-bottom:16px;box-sizing:border-box}
-.pf-chooser-view .pf-profile-tile{width:152px;min-width:152px}
-.pf-chooser-view .pf-profile-name{font-size:15px;line-height:19px}
-.pf-chooser-view .pf-lock-mark{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;margin:0 6px 0 0;color:#858c98;vertical-align:-2px}
-.pf-chooser-view .pf-lock-mark svg{display:block;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
-.pf-chooser-view .pf-add-avatar{position:relative}
+.pf-chooser-view .pf-profile-grid{gap:28px;margin-top:0;margin-bottom:36px}
+.pf-chooser-view .pf-avatar{width:100px;height:100px;margin-bottom:12px;box-sizing:border-box}
+.pf-chooser-view .pf-profile-tile{width:100px;min-width:100px}
+.pf-chooser-view .pf-profile-name{font-size:13px;line-height:17px;display:flex;align-items:center;justify-content:center}
+.pf-chooser-view .pf-lock-mark{display:inline-flex;align-items:center;justify-content:center;width:11px;height:11px;margin:0 5px 0 0;color:#858c98;flex-shrink:0}
+.pf-chooser-view .pf-lock-mark svg{display:block;width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.pf-chooser-view .pf-add-avatar{position:relative;border-style:dashed;border-color:rgba(255,255,255,.22);background:rgba(255,255,255,.04)}
 .pf-chooser-view .pf-add-avatar:before,.pf-chooser-view .pf-add-avatar:after{position:absolute;top:50%;left:50%;content:"";transform:translate(-50%,-50%);border-radius:2px;background:#626873}
-.pf-chooser-view .pf-add-avatar:before{width:26px;height:2px}
-.pf-chooser-view .pf-add-avatar:after{width:2px;height:26px}
-.pf-chooser-view .pf-button{height:46px;min-height:46px;padding:0 18px;font-size:15px}
-.pf-chooser-view .pf-button:first-child{width:178px}
-.pf-chooser-view .pf-button:last-child{width:120px}
+.pf-chooser-view .pf-add-avatar:before{width:18px;height:1.8px}
+.pf-chooser-view .pf-add-avatar:after{width:1.8px;height:18px}
+.pf-chooser-view .pf-button{height:38px;min-height:38px;padding:0 20px;font-size:13px;border-radius:20px;border-color:rgba(255,255,255,.18)}
+.pf-chooser-view .pf-button:first-child{width:auto}
+.pf-chooser-view .pf-button:last-child{width:auto}
 
-/* Manage profiles reference screen */
+/* Manage profiles — matched to target design */
 .pf-manage-view{transform:none}
-.pf-manage-view .pf-title{margin-bottom:54px;font-size:42px;line-height:1.1;letter-spacing:-1.2px}
-.pf-manage-grid{display:flex;justify-content:center;align-items:flex-start;gap:32px;flex-wrap:wrap;margin:0 auto 50px}
-.pf-manage-tile{position:relative;width:128px;min-width:128px}
-.pf-manage-tile .pf-avatar{width:128px;height:128px;margin:0 auto 14px;box-sizing:border-box}
-.pf-manage-avatar-shade{position:absolute;top:0;left:50%;width:128px;height:128px;transform:translateX(-50%);border-radius:50%;background:rgba(0,0,0,.42);pointer-events:none}
-.pf-manage-edit-mark{position:absolute;top:52px;left:50%;display:grid;width:22px;height:22px;place-items:center;transform:translateX(-50%);color:#f2f3f6;pointer-events:none}
-.pf-manage-edit-mark svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
-.pf-manage-tile .pf-profile-name{font-size:14px;line-height:18px}
-.pf-manage-tile .pf-lock-mark{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;margin:0 6px 0 0;color:#858c98;vertical-align:-2px}
-.pf-manage-tile .pf-lock-mark svg{display:block;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
-.pf-manage-view .pf-button{height:44px;min-height:44px;padding:0 16px;font-size:14px}
-.pf-manage-done{width:88px}
-.pf-manage-settings{width:108px}
+.pf-manage-view .pf-title{margin-bottom:40px;font-size:clamp(26px,3.2vw,36px);line-height:1.1;letter-spacing:-.03em}
+.pf-manage-grid{display:flex;justify-content:center;align-items:flex-start;gap:28px;flex-wrap:wrap;margin:0 auto 36px}
+.pf-manage-tile{position:relative;width:100px;min-width:100px}
+.pf-manage-tile .pf-avatar{width:100px;height:100px;margin:0 auto 12px;box-sizing:border-box}
+.pf-manage-avatar-shade{position:absolute;top:0;left:50%;width:100px;height:100px;transform:translateX(-50%);border-radius:50%;background:rgba(0,0,0,.52);pointer-events:none}
+.pf-manage-edit-mark{position:absolute;top:50px;left:50%;display:grid;width:20px;height:20px;place-items:center;transform:translate(-50%,-50%);color:#f0f1f5;pointer-events:none}
+.pf-manage-edit-mark svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pf-manage-tile .pf-profile-name{display:flex;align-items:center;justify-content:center;font-size:13px;line-height:17px;color:#9da5b4}
+.pf-manage-tile .pf-lock-mark{display:inline-flex;align-items:center;justify-content:center;width:11px;height:11px;margin:0 5px 0 0;color:#858c98;flex-shrink:0}
+.pf-manage-tile .pf-lock-mark svg{display:block;width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.pf-manage-view .pf-button{height:38px;min-height:38px;padding:0 20px;font-size:13px;border-radius:20px;border-color:rgba(255,255,255,.18)}
+.pf-manage-done{width:auto}
+.pf-manage-settings{width:auto}
+
+/* Hide top-right close button on PIN and Edit Profile screens to match references */
+.pf-shell:has(.pf-pin-view) .pf-close,
+.pf-shell:has(.pf-edit-view) .pf-close{display:none}
+
+/* PIN Verification screen — matched to after_click_pencil_on_manageprofile.png */
+.pf-pin-view{transform:none;width:min(100%,520px);margin:auto}
+.pf-pin-view .pf-centered-avatar{margin:0 auto 30px}
+.pf-pin-view .pf-centered-avatar .pf-avatar{width:64px;height:64px;margin:0 auto;font-size:30px;box-sizing:border-box}
+.pf-pin-view .pf-title{margin:0 0 12px;color:#f5f6fa;font-family:Arial,Helvetica,sans-serif;font-size:36px;font-weight:700;line-height:1.1;letter-spacing:-1px}
+.pf-pin-view .pf-subtitle{display:block;margin:0 0 40px;color:#8f96a6;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:400;line-height:1.4}
+.pf-pin-view .pf-pin-form{margin:0}
+.pf-pin-view .pf-pin-row{display:flex;justify-content:center;align-items:center;gap:12px;margin:0 auto}
+.pf-pin-view .pf-pin-cell{width:53px;height:68px;padding:0;box-sizing:border-box;border:1px solid rgba(255,255,255,.09);border-radius:14px;outline:0;background:rgba(255,255,255,.022);color:#f5f6fa;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:600;text-align:center;caret-color:#f5f6fa;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}
+.pf-pin-view .pf-pin-cell:focus{border-color:rgba(255,255,255,.68);background:rgba(255,255,255,.045);box-shadow:0 0 0 2px rgba(255,255,255,.16)}
+.pf-pin-view .pf-form-error{min-height:18px;margin:16px 0 0;color:#ff6b72;font-size:13px}
+.pf-pin-view .pf-pin-cancel-wrap{margin-top:54px;display:flex;justify-content:center}
+.pf-pin-view .pf-pin-cancel{padding:4px 10px;border:0;background:transparent;color:#8891a2;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:400;line-height:1.2;cursor:pointer;transition:color .15s ease}
+.pf-pin-view .pf-pin-cancel:hover{color:#f5f6fa}
+
+/* Edit profile screen — matched to edit_profile_manageprofile.png */
+.pf-edit-view{transform:none;width:min(100%,578px);margin:auto}
+.pf-edit-view .pf-title{margin:0 0 36px;color:#f5f6fa;font-family:Arial,Helvetica,sans-serif;font-size:36px;font-weight:700;line-height:1.1;letter-spacing:-1px;text-align:center}
+.pf-edit-view .pf-panel{width:100%;margin:0 auto;text-align:left}
+.pf-edit-view .pf-panel-card{padding:25px 26px 28px;box-sizing:border-box;border:1px solid rgba(255,255,255,.07);border-radius:16px;background:linear-gradient(180deg,rgba(26,15,18,.78) 0%,rgba(14,13,16,.88) 48%,rgba(13,13,16,.92) 100%);box-shadow:0 18px 44px rgba(0,0,0,.32)}
+.pf-edit-top{display:flex;align-items:center;gap:21px}
+.pf-edit-avatar-wrap{position:relative;flex:0 0 81px;width:81px;height:81px}
+.pf-edit-avatar-wrap .pf-avatar{width:81px;height:81px;margin:0;font-size:38px;box-sizing:border-box}
+.pf-edit-avatar-btn{position:absolute;right:0;bottom:0;display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:50%;background:#f4f5f7;color:#12141a;box-shadow:0 2px 6px rgba(0,0,0,.38);cursor:pointer;transition:transform .15s ease,background .15s ease}
+.pf-edit-avatar-btn:hover{transform:scale(1.06);background:#fff}
+.pf-edit-avatar-btn svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pf-edit-name-col{flex:1;min-width:0}
+.pf-edit-label{display:block;margin:0 0 9px;color:#858d9b;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;line-height:1.2;letter-spacing:.12em;text-transform:uppercase}
+.pf-edit-name-col .pf-input{width:100%;height:44px;padding:0 14px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(255,255,255,.04);color:#f5f6fa;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700}
+.pf-edit-name-col .pf-input:focus{border-color:rgba(255,255,255,.28)}
+.pf-edit-avatar-drawer{margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}
+.pf-edit-pin-section{margin-top:42px}
+.pf-edit-pin-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.pf-edit-heading{display:flex;align-items:center;gap:7px;margin:0;color:#f2f3f7;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;line-height:1.25}
+.pf-edit-heading-icon{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;color:#8b93a4;flex-shrink:0}
+.pf-edit-heading-icon svg{display:block;width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round}
+.pf-edit-desc{display:block;margin-top:7px;color:#7f8899;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:400;line-height:1.45}
+.pf-edit-view .pf-toggle{flex:0 0 45px;width:45px;height:24px;margin-top:1px;border-radius:999px;background:#30323a}
+.pf-edit-view .pf-toggle:after{top:3px;left:3px;width:18px;height:18px;background:#a5a7ad}
+.pf-edit-view .pf-toggle:checked{background:#f4f5f7}
+.pf-edit-view .pf-toggle:checked:after{transform:translateX(21px);background:#101319}
+.pf-edit-view .pf-pin-set{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+.pf-edit-view .pf-pin-set .pf-input{height:38px;font-size:13px;border-radius:10px;max-width:180px}
+.pf-edit-divider{height:1px;margin:28px 0 26px;background:rgba(255,255,255,.07)}
+.pf-delete-link{display:inline-block;margin-top:13px;padding:0;border:0;background:transparent;color:#dc2e35;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:500;line-height:1.3;cursor:pointer;transition:color .15s ease}
+.pf-delete-link:hover{color:#ff4d54;text-decoration:underline}
+.pf-edit-view .pf-form-error{min-height:0;margin:8px 0 0}
+.pf-edit-view .pf-form-error:empty{display:none}
+.pf-edit-actions{justify-content:flex-end;gap:11px;margin-top:25px}
+.pf-edit-back,.pf-edit-save{height:44px;min-height:44px;border-radius:22px;font-family:Arial,Helvetica,sans-serif;font-size:13px;box-sizing:border-box}
+.pf-edit-back{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:104px;padding:0 20px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.02);color:#8e97a8;font-weight:500}
+.pf-edit-back svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.pf-edit-back:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.18);color:#fff}
+.pf-edit-save{min-width:95px;padding:0 22px;border:1px solid #fff;background:#fff;color:#111319;font-weight:700}
+.pf-edit-save:hover{background:#f2f3f5;border-color:#f2f3f5;color:#111319}
 
 @media(max-width:640px){
   .pf-shell{
@@ -2116,18 +2183,123 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
     font-size:15px;
   }
 
-  .pf-chooser-view .pf-title{margin-bottom:42px;font-size:36px;line-height:1.1;letter-spacing:-1px}
-  .pf-chooser-view .pf-profile-grid{gap:24px;margin-bottom:38px;flex-wrap:wrap}
-  .pf-chooser-view .pf-profile-tile{width:126px;min-width:126px}
-  .pf-chooser-view .pf-avatar{width:126px;height:126px}
+  .pf-chooser-view .pf-title{margin-bottom:32px;font-size:clamp(24px,6vw,32px);line-height:1.1;letter-spacing:-.02em}
+  .pf-chooser-view .pf-profile-grid{gap:20px;margin-bottom:30px;flex-wrap:wrap}
+  .pf-chooser-view .pf-profile-tile{width:90px;min-width:90px}
+  .pf-chooser-view .pf-avatar{width:90px;height:90px}
   .pf-chooser-view .pf-button:first-child{width:auto}
   .pf-chooser-view .pf-button:last-child{width:auto}
-  .pf-manage-view .pf-title{margin-bottom:48px;font-size:36px;line-height:1.1;letter-spacing:-1px}
-  .pf-manage-grid{gap:24px;margin-bottom:42px}
-  .pf-manage-tile{width:126px;min-width:126px}
-  .pf-manage-tile .pf-avatar,.pf-manage-avatar-shade{width:126px;height:126px}
-  .pf-manage-edit-mark{top:51px;width:24px;height:24px}
-  .pf-manage-edit-mark svg{width:24px;height:24px}
-  .pf-manage-tile .pf-profile-name{font-size:15px;line-height:19px}
-  .pf-manage-view .pf-button{height:46px;min-height:46px;font-size:15px}
+  .pf-manage-view .pf-title{margin-bottom:32px;font-size:clamp(24px,6vw,32px);line-height:1.1;letter-spacing:-.02em}
+  .pf-manage-grid{gap:20px;margin-bottom:28px}
+  .pf-manage-tile{width:90px;min-width:90px}
+  .pf-manage-tile .pf-avatar,.pf-manage-avatar-shade{width:90px;height:90px}
+  .pf-manage-edit-mark{top:45px;transform:translate(-50%,-50%);width:18px;height:18px}
+  .pf-manage-edit-mark svg{width:16px;height:16px}
+  .pf-manage-tile .pf-profile-name{font-size:12px;line-height:16px}
+  .pf-manage-view .pf-button{height:36px;min-height:36px;font-size:12px}
+  .pf-pin-view .pf-title{font-size:30px;margin-bottom:10px}
+  .pf-edit-view .pf-title{font-size:30px;margin-bottom:24px}
+  .pf-pin-view .pf-centered-avatar .pf-avatar{width:56px;height:56px}
+  .pf-pin-view .pf-pin-cell{width:48px;height:62px}
+  .pf-edit-view .pf-panel-card{padding:20px 18px 22px}
+  .pf-edit-top{gap:16px}
+  .pf-edit-avatar-wrap,.pf-edit-avatar-wrap .pf-avatar{width:68px;height:68px;flex-basis:68px}
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PROFILE FLOW — "Choose your look" (unified avatar grid) + "Lock it with a PIN?"
+   Reference: target_chooselook.png / target_pinlock.png (1917px wide)
+   ============================================================ */
+
+.profile-flow{
+  background:
+    radial-gradient(ellipse 45% 34% at 50% 11%,rgba(88,16,26,.48),rgba(50,10,18,.16) 58%,transparent 76%),
+    radial-gradient(ellipse at 50% 0%,rgba(40,8,14,.30),transparent 55%),
+    #050609;
+}
+
+/* Progress dots — 8px dots / 32px active pill, 9px gaps */
+.pf-step-dots{gap:9px;margin:0 auto 31px}
+.pf-step-dots span{width:8px;height:8px;border-radius:4px;background:rgba(255,255,255,.38)}
+.pf-step-dots span.active{width:32px;background:#ececee}
+
+/* Profile chip — 126×52 pill: 38px avatar + 15px bold name */
+.pf-tag{align-self:center;margin:0 0 52px;padding:6px 22px 6px 8px;gap:10px;border:1px solid rgba(255,255,255,.09);border-radius:26px;background:rgba(255,255,255,.03);color:#e9eaee;font-size:15px;font-weight:700;letter-spacing:0;text-transform:none}
+.pf-tag .pf-avatar{width:38px;height:38px;font-size:20px}
+
+/* ── Choose your look — one unified avatar grid ── */
+.pf-look-view{display:flex;flex-direction:column;box-sizing:border-box;width:min(100%,846px);height:calc(100vh - 56px);min-height:600px;max-height:940px;padding-top:38px}
+.pf-look-view .pf-title{margin:0 0 15px;font-size:clamp(30px,2.2vw,42px);line-height:1.1;letter-spacing:-.5px}
+.pf-look-view .pf-subtitle{display:block;margin:0;color:#8b919c;font-size:15px;line-height:1.35}
+.pf-look-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:48px;padding:24px 2px 28px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent}
+.pf-look-scroll::-webkit-scrollbar{width:8px}
+.pf-look-scroll::-webkit-scrollbar-track{background:transparent}
+.pf-look-scroll::-webkit-scrollbar-thumb{border-radius:4px;background:rgba(255,255,255,.18)}
+.pf-look-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:17px;max-width:819px;margin:0 auto}
+.pf-look-view .pf-avatar-choice{width:100%;font-size:clamp(30px,2.6vw,50px)}
+.pf-look-actions{margin-top:26px}
+
+/* Home profile avatar picker: compact panel over the still-visible Home screen. */
+.change-avatar-overlay{position:fixed;inset:0;z-index:20000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(3,5,8,.62);backdrop-filter:blur(9px) saturate(.8);-webkit-backdrop-filter:blur(9px) saturate(.8);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .16s ease,visibility .16s ease}
+.change-avatar-overlay.is-open{opacity:1;visibility:visible;pointer-events:auto}
+.change-avatar-panel{display:flex;flex-direction:column;width:min(840px,calc(100vw - 40px));height:min(755px,calc(100vh - 48px));overflow:hidden;border:1px solid rgba(255,255,255,.14);border-radius:21px;background:linear-gradient(180deg,rgba(18,22,25,.50),rgba(12,16,19,.48));box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 20px 50px rgba(0,0,0,.42);backdrop-filter:blur(22px) saturate(1.08);-webkit-backdrop-filter:blur(22px) saturate(1.08);color:#eef0f4;font-family:var(--hn-font,'Inter',Arial,sans-serif);transform:translateY(5px) scale(.992);transition:transform .16s ease}
+.change-avatar-overlay.is-open .change-avatar-panel{transform:none}
+.change-avatar-header{display:flex;align-items:center;justify-content:space-between;flex:0 0 80px;padding:0 25px;border-bottom:1px solid rgba(255,255,255,.07)}
+.change-avatar-header h2{color:#f1f2f4;font-size:19px;font-weight:650;letter-spacing:-.035em}
+.change-avatar-close{display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:50%;background:transparent;color:#858b94;font:300 26px/1 Arial,sans-serif;transition:background .15s ease,color .15s ease}
+.change-avatar-close:hover{background:rgba(255,255,255,.08);color:#fff}
+.change-avatar-content{flex:1;min-height:0;overflow:auto;padding:19px 29px 24px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.38) transparent}
+.change-avatar-content::-webkit-scrollbar{width:8px}
+.change-avatar-content::-webkit-scrollbar-track{background:transparent}
+.change-avatar-content::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:8px;background:rgba(255,255,255,.35);background-clip:padding-box}
+.change-avatar-group+.change-avatar-group{margin-top:29px}
+.change-avatar-group h3{margin:0 0 14px;color:#777d86;font-size:12px;font-weight:700;letter-spacing:.15em;text-transform:uppercase}
+.change-avatar-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
+.change-avatar-grid .pf-avatar-choice{width:100%;max-width:116px;justify-self:center;box-shadow:none;background:none}
+.change-avatar-grid .pf-avatar-choice.selected{box-shadow:0 0 0 3px rgba(255,255,255,.15)}
+.change-avatar-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;flex:0 0 70px;padding:0 25px;border-top:1px solid rgba(255,255,255,.07)}
+.change-avatar-footer p{min-width:0;color:#ff9b9b;font-size:13px}
+.change-avatar-save{min-width:112px;min-height:42px;border-radius:22px;font-size:14px;font-weight:650}
+.change-avatar-save:disabled{opacity:.48;cursor:wait}
+@media(max-width:700px){.change-avatar-overlay{padding:12px}.change-avatar-panel{width:100%;height:min(760px,calc(100vh - 24px));border-radius:17px}.change-avatar-header{flex-basis:66px;padding:0 18px}.change-avatar-content{padding:16px 17px 20px}.change-avatar-group+.change-avatar-group{margin-top:24px}.change-avatar-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.change-avatar-footer{flex-basis:64px;padding:0 17px}}
+@media(max-width:380px){.change-avatar-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}}
+
+/* Edit Profile modal uses the same glass surface as the Home profile dropdown. */
+#m-prof.overlay{background:rgba(3,5,8,.38);backdrop-filter:blur(22px) saturate(1.08);-webkit-backdrop-filter:blur(22px) saturate(1.08)}
+#m-prof .modal{border:1px solid rgba(255,255,255,.14);border-radius:18px;background:linear-gradient(180deg,rgba(18,22,25,.50),rgba(12,16,19,.48));box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 20px 50px rgba(0,0,0,.42);backdrop-filter:blur(22px) saturate(1.08);-webkit-backdrop-filter:blur(22px) saturate(1.08);opacity:0;visibility:hidden;transform:translateY(-6px) scale(.985);animation:none;transition:opacity .18s ease,transform .18s ease,visibility .18s ease}
+#m-prof:not(.hidden) .modal{opacity:1;visibility:visible;transform:none}
+#m-prof .fld input[readonly]{border-color:rgba(255,255,255,.08);background:rgba(255,255,255,.025);color:rgba(255,255,255,.58);cursor:default}
+
+/* Shared action buttons — Back 129×55 pill, Continue 416×55 pill */
+.pf-look-view .pf-actions,.pf-lock-view .pf-actions{gap:16px;flex-wrap:nowrap}
+.pf-btn-back{display:inline-flex;align-items:center;justify-content:center;gap:9px;box-sizing:border-box;width:129px;min-width:129px;height:55px;min-height:55px;border:1px solid rgba(255,255,255,.12);border-radius:28px;background:rgba(255,255,255,.03);color:#9aa3b2;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:500}
+.pf-btn-back svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.pf-btn-back:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.2);color:#fff}
+.pf-btn-continue{box-sizing:border-box;width:416px;max-width:62vw;height:55px;min-height:55px;border-radius:28px;border-color:#fff;background:#fff;color:#101319;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:600;white-space:nowrap}
+.pf-btn-continue:hover{background:#fff;border-color:#fff;color:#101319}
+
+/* ── Lock it with a PIN? ── */
+.pf-lock-view{width:min(100%,660px)}
+.pf-lock-view .pf-title{margin:0 0 16px;font-size:clamp(30px,2.2vw,42px);line-height:1.1;letter-spacing:-.5px}
+.pf-lock-view .pf-subtitle{display:block;max-width:545px;margin:0 auto;color:#767d8a;font-size:15px;line-height:28px}
+.pf-newpin-row{display:flex;justify-content:center;gap:15px;margin:56px auto 0}
+.pf-newpin-cell{width:65px;height:66px;padding:0;box-sizing:border-box;border:1px solid rgba(255,255,255,.06);border-radius:16px;outline:0;background:rgba(255,255,255,.02);color:#f5f6fa;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:600;text-align:center;caret-color:#f5f6fa;transition:border-color .15s ease,background .15s ease,box-shadow .15s ease}
+.pf-newpin-cell:focus{border-color:#fff;background:rgba(255,255,255,.045);box-shadow:0 0 0 1px #fff}
+.pf-lock-view .pf-form-error{min-height:18px;margin:12px 0 0}
+.pf-lock-view .pf-actions{margin-top:15px}
+
+/* Close button stays hidden on the create-flow steps, matching the references */
+.pf-shell:has(.pf-look-view) .pf-close,
+.pf-shell:has(.pf-lock-view) .pf-close{display:none}
+
+@media(max-width:640px){
+  .pf-look-view{height:auto;min-height:calc(100vh - 98px);max-height:none}
+  .pf-tag{margin-bottom:36px}
+  .pf-look-scroll{margin-top:30px;padding-bottom:20px}
+  .pf-look-grid{grid-template-columns:repeat(4,1fr);gap:12px}
+  .pf-look-actions{margin-top:20px}
+  .pf-btn-back{width:auto;min-width:104px}
+  .pf-btn-continue{width:auto;flex:1;max-width:none}
+  .pf-newpin-cell{width:56px;height:60px;border-radius:14px}
+  .pf-lock-view .pf-subtitle{line-height:1.7}
 }

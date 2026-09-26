@@ -1,26 +1,26 @@
 {
-  "1e123bce-8938-4305-a015-5460c8c77bca": {
-    "id": "1e123bce-8938-4305-a015-5460c8c77bca",
+  "db5c37ed-3224-46c3-a105-b2497b7f399f": {
+    "id": "db5c37ed-3224-46c3-a105-b2497b7f399f",
     "userId": "user_ashish",
-    "profileId": "profile_69f26e014610",
-    "createdAt": 1790258841744,
-    "lastActive": 1790264644455,
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+    "profileId": "profile_bfbf1f670ddf",
+    "createdAt": 1790415001159,
+    "lastActive": 1790415498769,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ZCode/3.14.3 Chrome/146.0.7680.80 Electron/41.0.3 Safari/537.36"
   },
-  "973bd90d-d361-488f-a925-0fd3eb140115": {
-    "id": "973bd90d-d361-488f-a925-0fd3eb140115",
+  "890c87f2-bb83-41a4-b061-2c16d9c32cd6": {
+    "id": "890c87f2-bb83-41a4-b061-2c16d9c32cd6",
     "userId": "user_ashish",
-    "profileId": "profile_69f26e014610",
-    "createdAt": 1790260724297,
-    "lastActive": 1790260724297,
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
+    "profileId": "profile_2aef36e57bfe",
+    "createdAt": 1790415970686,
+    "lastActive": 1790439766697,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36 Edg/154.0.0.0"
   },
-  "60b2ebbf-941b-4a25-9896-5e0835234967": {
-    "id": "60b2ebbf-941b-4a25-9896-5e0835234967",
+  "c1256800-d73f-4d8f-8252-4138c046eee0": {
+    "id": "c1256800-d73f-4d8f-8252-4138c046eee0",
     "userId": "user_ashish",
-    "profileId": "profile_69f26e014610",
-    "createdAt": 1790260731032,
-    "lastActive": 1790261148845,
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0"
+    "profileId": "profile_3cf402469e2e",
+    "createdAt": 1790418732394,
+    "lastActive": 1790422723863,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
   }
 }

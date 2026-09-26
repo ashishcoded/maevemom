@@ -47,6 +47,7 @@
       <div id="f-register" class="aform hidden">
         <div class="fld"><label>Username</label><input id="r-user" type="text" placeholder="choose a username" onkeydown="if(event.key==='Enter')doRegister()"><span class="fhint">2–20 chars (letters/numbers/_)</span></div>
         <div class="fld"><label>Display Name</label><input id="r-name" type="text" placeholder="your name" onkeydown="if(event.key==='Enter')doRegister()"></div>
+        <div class="fld"><label>Email address</label><input id="r-email" type="email" maxlength="254" placeholder="you@example.com" autocomplete="email" required onkeydown="if(event.key==='Enter')doRegister()"></div>
         <div class="fld"><label>Password</label><input id="r-pass" type="password" placeholder="min 6 characters" onkeydown="if(event.key==='Enter')doRegister()"></div>
         <button class="btn-r" onclick="doRegister()"><span>Create Account</span><span class="arr">→</span></button>
         <p class="ferr" id="r-err"></p>
@@ -84,7 +85,7 @@
           </div>
           <div class="hn-profile-links hn-profile-account">
             <button onclick="openProfileSwitcher(event)"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg>Switch profile</button>
-            <div class="hn-row is-static"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></svg>Change avatar</div>
+            <button type="button" onclick="openChangeAvatar(event)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></svg>Change avatar</button>
           </div>
           <div class="hn-profile-links"><button class="hn-profile-logout" onclick="signOut()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>Logout</button></div>
         </div>
@@ -577,19 +578,10 @@
     <div class="prof-av-wrap">
       <div class="prof-av" id="prof-av"></div>
       <label class="av-up-lbl">Change Photo<input type="file" id="av-file" accept="image/*" style="display:none" onchange="prevAvatar(this)"></label>
-      <p class="clr-lbl">or pick color</p>
-      <div class="clr-row">
-        <button class="clr" style="background:#e50914" onclick="pickClr('#e50914')"></button>
-        <button class="clr" style="background:#ff6b9d" onclick="pickClr('#ff6b9d')"></button>
-        <button class="clr" style="background:#f59e0b" onclick="pickClr('#f59e0b')"></button>
-        <button class="clr" style="background:#10b981" onclick="pickClr('#10b981')"></button>
-        <button class="clr" style="background:#6366f1" onclick="pickClr('#6366f1')"></button>
-        <button class="clr" style="background:#06b6d4" onclick="pickClr('#06b6d4')"></button>
-      </div>
     </div>
-    <div class="fld"><label>Display Name</label><input id="pf-nm" type="text" maxlength="30"></div>
-    <div class="fld"><label>Bio</label><input id="pf-bio" type="text" maxlength="80" placeholder="something about you"></div>
-    <div class="fld"><label>New Password <em style="opacity:.35;font-weight:400">(blank = keep)</em></label><input id="pf-pw" type="password" placeholder="new password"></div>
+    <div class="fld"><label>Profile name</label><input id="pf-nm" type="text" maxlength="30"></div>
+    <div class="fld"><label>Username</label><input id="pf-username" type="text" readonly></div>
+    <div class="fld"><label>Email address</label><input id="pf-email" type="text" readonly></div>
     <button class="btn-r" onclick="saveProfile()">Save Changes →</button>
     <p class="ferr" id="pf-err"></p>
   </div>
@@ -615,7 +607,7 @@
 
 <div class="overlay hidden" id="m-chat-settings">
   <div class="modal modal-w chat-settings-modal">
-    <div class="mhdr"><h3>Chat Settings</h3><button class="mx" onclick="closeModal('m-chat-settings')">âœ•</button></div>
+    <div class="mhdr"><h3>Chat Settings</h3><button class="mx" onclick="closeModal('m-chat-settings')">×</button></div>
     <p class="modal-desc">Choose the reactions and one-tap messages available during playback, then manage PNG stickers for the room chat experience.</p>
 
     <div class="chat-settings-section">
@@ -686,6 +678,13 @@
 
 <div id="toast" class="toast hidden"></div>
 <div class="profile-flow" id="profile-flow" aria-hidden="true"><div class="pf-shell"><button class="pf-close" onclick="closeProfileSwitcher()" aria-label="Close profile manager">×</button><div id="pf-flow-content"></div></div></div>
+<div class="change-avatar-overlay" id="change-avatar-overlay" aria-hidden="true" onclick="if(event.target===this)closeChangeAvatar()">
+  <section class="change-avatar-panel" role="dialog" aria-modal="true" aria-labelledby="change-avatar-title" onclick="event.stopPropagation()">
+    <header class="change-avatar-header"><h2 id="change-avatar-title">Change avatar</h2><button class="change-avatar-close" type="button" onclick="closeChangeAvatar()" aria-label="Close avatar picker">×</button></header>
+    <div class="change-avatar-content" id="change-avatar-content"></div>
+    <footer class="change-avatar-footer"><p id="change-avatar-error" role="status"></p><button class="pf-button primary change-avatar-save" id="change-avatar-save" type="button" onclick="saveChangedAvatar()">Save</button></footer>
+  </section>
+</div>
 <div id="efloat" style="position:fixed;inset:0;pointer-events:none;z-index:9998;overflow:hidden"></div>
 <audio id="remote-audio" autoplay playsinline style="display:none"></audio>
 
