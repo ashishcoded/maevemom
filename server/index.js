@@ -40,6 +40,7 @@ const libraryFile = path.join(dataDir, 'libraries.json');
 const alertContactsFile = path.join(dataDir, 'alert-contacts.json');
 const profileFile = path.join(dataDir, 'profiles.json');
 const deviceSessionsFile = path.join(dataDir, 'device-sessions.json');
+const usersFile = path.join(dataDir, 'users.json');
 
 const mkStore = pfx => multer.diskStorage({
   destination: (_, __, cb) => cb(null, uploadsDir),
@@ -83,6 +84,20 @@ const alertSendTimes = new Map();
 const userProfiles = new Map();
 const deviceSessions = new Map();
 const profilePinFailures = new Map();
+
+for (const [id, user] of Object.entries(readJsonMap(usersFile))) {
+  if (user?.id === id && typeof user.username === 'string' && typeof user.passwordHash === 'string') users.set(id, user);
+}
+function saveUsers() {
+  const tempFile = usersFile + '.tmp';
+  try {
+    fs.writeFileSync(tempFile, JSON.stringify(Object.fromEntries(users), null, 2), 'utf8');
+    fs.renameSync(tempFile, usersFile);
+  } catch (error) {
+    try { fs.unlinkSync(tempFile); } catch {}
+    throw error;
+  }
+}
 
 function readJsonMap(file) {
   try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file,'utf8')) : {}; }
@@ -163,14 +178,7 @@ async function sendAlertWithProvider() {
 }
 
 // ── Seed ───────────────────────────────────────────────────────────────────────
-(async () => {
-  const mk = async (id, uname, dname, color, bio, pw) =>
-    users.set(id, { id, username:uname, displayName:dname, avatar:dname[0].toUpperCase(),
-      avatarColor:color, avatarUrl:null, bio, passwordHash:await bcrypt.hash(pw,10), createdAt:Date.now() });
-  await mk('user_ashish','ashish','Ashish',   '#e50914','The Owner \uD83C\uDFAC','ashish123');
-  await mk('user_disha', 'disha', 'Disha \u2728','#ff6b9d','The Co-star \uD83D\uDC95','disha123');
-  console.log('\u2705 ashish/ashish123 | disha/disha123');
-})();
+// Accounts are persisted in users.json. No demo accounts are created.
 
 function loadLibraries() {
   try {
@@ -484,12 +492,16 @@ app.post('/api/auth/register', async (req,res) => {
     if([...users.values()].find(u=>u.email?.toLowerCase()===normalizedEmail)) return res.status(409).json({error:'Email address already in use'});
     const clrs=['#e50914','#ff6b9d','#f59e0b','#10b981','#6366f1','#ec4899','#06b6d4','#84cc16'];
     const id='user_'+uuidv4().replace(/-/g,'').slice(0,10);
+    const passwordHash=await bcrypt.hash(password,10);
+    if([...users.values()].find(u=>u.username.toLowerCase()===username.toLowerCase())) return res.status(409).json({error:'Username taken'});
+    if([...users.values()].find(u=>u.email?.toLowerCase()===normalizedEmail)) return res.status(409).json({error:'Email address already in use'});
     const user={id,username:username.toLowerCase(),email:normalizedEmail,displayName:displayName.trim(),
       avatar:displayName.trim()[0].toUpperCase(),
       avatarColor:clrs[Math.floor(Math.random()*clrs.length)],
       avatarUrl:null,bio:'Movie lover',
-      passwordHash:await bcrypt.hash(password,10),createdAt:Date.now()};
+      passwordHash,createdAt:Date.now()};
     users.set(id,user);
+    saveUsers();
     const profile=ensureUserProfiles(id)[0];
     const token=createSessionToken(id,profile.id,req);
     res.json({token,user:profileUser(id,profile.id)});
@@ -1179,5 +1191,5 @@ io.on('connection', socket => {
 
 server.listen(PORT,()=>{
   console.log(`\nMaeve'mom v5  →  http://localhost:${PORT}`);
-  console.log('ashish/ashish123  |  disha/disha123\n');
+  console.log(`Loaded ${users.size} account(s). Create an account from the sign-up screen.\n`);
 });

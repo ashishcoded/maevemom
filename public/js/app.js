@@ -410,6 +410,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Noise canvas on auth
   drawNoise();
+  buildAuthPosterWall();
+  drawAuthQr();
+  startAuthQrCountdown();
 
   // Build emoji strips (after Twemoji may have loaded)
   const buildEmoji = () => buildEmojiStrips();
@@ -1128,7 +1131,6 @@ function renderUserLibraryList(id, items, editable) {
 }
 
 // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-window.quickLogin = async (u,p) => { $('l-user').value=u; $('l-pass').value=p; await doLogin(); };
 window.doLogin = async () => {
   const u=$('l-user').value.trim(), p=$('l-pass').value, e=$('l-err'); e.textContent='';
   if(!u||!p){e.textContent='Fill in all fields';return;}
@@ -1139,12 +1141,118 @@ window.doLogin = async () => {
   } catch(ex){e.textContent=ex.message;}
 };
 window.doRegister = async () => {
-  const u=$('r-user').value.trim(),n=$('r-name').value.trim(),email=$('r-email').value.trim(),p=$('r-pass').value,e=$('r-err');e.textContent='';
-  if(!u||!n||!email||!p){e.textContent='Fill in all fields';return;}
+  const u=$('r-user').value.trim(),email=$('r-email').value.trim(),p=$('r-pass').value,e=$('r-err');e.textContent='';
+  if(!u||!email||!p){e.textContent='Fill in all fields';return;}
   if(p.length<6){e.textContent='Password 6+ chars';return;}
-  try{const{token,user}=await api('POST','/auth/register',{username:u,displayName:n,email,password:p});persist(user,token);goHome();}catch(ex){e.textContent=ex.message;}
+  try{const{token,user}=await api('POST','/auth/register',{username:u,displayName:u,email,password:p});persist(user,token);goHome();}catch(ex){e.textContent=ex.message;}
 };
-window.signOut = () => { if(S.token)api('POST','/auth/logout',{}).catch(()=>{});closeProfileSwitcher();endCall(); stopAllTimers(); clearRoomSession(); if(S.socket){S.socket.disconnect();S.socket=null;} S.room=null; S.library={items:[],usage:null}; $$('.overlay').forEach(o=>o.classList.add('hidden')); clearSession(); goAuth(); };
+window.signOut = () => { if(S.token)api('POST','/auth/logout',{}).catch(()=>{});closeProfileSwitcher();endCall(); stopAllTimers(); clearRoomSession(); if(S.socket){S.socket.disconnect();S.socket=null;} S.room=null; S.library={items:[],usage:null}; $$('.overlay').forEach(o=>o.classList.add('hidden')); clearSession(); switchAuthTab('login'); goAuth(); };
+
+// ── Auth screen: tab switch, password reveal, poster wall, device QR ──
+window.switchAuthTab = tab => {
+  const login = tab !== 'register';
+  $('f-login').classList.toggle('hidden', !login);
+  $('f-register').classList.toggle('hidden', login);
+  $('auth-title').textContent = login ? 'Welcome back to Maeve\u2019mom' : 'Create your Maeve\u2019mom account';
+  $('auth-sub').textContent = login ? 'Scan the QR code or use your username to log in' : 'Fill in your details to get started';
+};
+window.toggleAuthPw = (id, btn) => { const input = $(id); input.type = input.type === 'password' ? 'text' : 'password'; btn.classList.toggle('is-on'); };
+
+// ── POSTER WALL CONFIG ──
+// Replace these 36 paths with your own poster images.
+// Order: column 1 rows 1-9, column 2 rows 1-9, column 3 rows 1-9, column 4 rows 1-9.
+// (Currently filled with existing project images as placeholders.)
+const AUTH_POSTERS = [
+  '/images/login_screenpicture/lscreen_01.jpg',
+  '/images/login_screenpicture/lscreen_02.jpg',
+  '/images/login_screenpicture/lscreen_03.jpg',
+  '/images/login_screenpicture/lscreen_04.jpg',
+  '/images/login_screenpicture/lscreen_05.jpg',
+  '/images/login_screenpicture/lscreen_06.jpg',
+  '/images/login_screenpicture/lscreen_07.jpg',
+  '/images/login_screenpicture/lscreen_08.jpg',
+  '/images/login_screenpicture/lscreen_09.jpg',
+  '/images/login_screenpicture/lscreen_10.jpg',
+  '/images/login_screenpicture/lscreen_11.jpg',
+  '/images/login_screenpicture/lscreen_12.jpg',
+  '/images/login_screenpicture/lscreen_13.jpg',
+  '/images/login_screenpicture/lscreen_14.jpg',
+  '/images/login_screenpicture/lscreen_15.jpg',
+  '/images/login_screenpicture/lscreen_16.jpg',
+  '/images/login_screenpicture/lscreen_17.jpg',
+  '/images/login_screenpicture/lscreen_18.jpg',
+  '/images/login_screenpicture/lscreen_19.jpg',
+  '/images/login_screenpicture/lscreen_20.jpg',
+  '/images/login_screenpicture/lscreen_21.jpg',
+  '/images/login_screenpicture/lscreen_22.jpg',
+  '/images/login_screenpicture/lscreen_23.jpg',
+  '/images/login_screenpicture/lscreen_24.jpg',
+  '/images/login_screenpicture/lscreen_25.jpg',
+  '/images/login_screenpicture/lscreen_26.jpg',
+  '/images/login_screenpicture/lscreen_27.jpg',
+  '/images/login_screenpicture/lscreen_28.jpg',
+  '/images/login_screenpicture/lscreen_29.jpg',
+  '/images/login_screenpicture/lscreen_30.jpg',
+  '/images/login_screenpicture/lscreen_31.jpg',
+  '/images/login_screenpicture/lscreen_32.jpg',
+  '/images/login_screenpicture/lscreen_33.jpg',
+  '/images/login_screenpicture/lscreen_34.jpg',
+  '/images/login_screenpicture/lscreen_35.jpg',
+  '/images/login_screenpicture/lscreen_36.jpg'
+];
+
+const AUTH_POSTER_FALLBACKS = AUTH_POSTERS;
+
+
+///////////////////////
+function buildAuthPosterWall() {
+  const wall = $('auth-wall'); if (!wall) return;
+  const perCol = 9, cols = 4;
+  for (let c = 0; c < cols; c++) {
+    const col = document.createElement('div');
+    col.className = 'auth-pcol' + (c % 2 ? ' down' : '');
+    const track = document.createElement('div');
+    track.className = 'auth-ptrack';
+    const dur = 64 + c * 7;
+    track.style.animationDuration = dur + 's';
+    track.style.animationDelay = -(c / cols) * dur + 's';
+    const set = Array.from({length: perCol}, (_, i) => AUTH_POSTERS[c * perCol + i] || AUTH_POSTER_FALLBACKS[0]);
+    track.innerHTML = [...set, ...set].map(src => `<div class="auth-poster"><img src="${src}" alt="" onerror="if(this.dataset.fb){this.parentNode.classList.add('is-empty');this.remove()}else{this.dataset.fb=1;this.src='${AUTH_POSTER_FALLBACKS[(c * perCol + set.indexOf(src)) % AUTH_POSTER_FALLBACKS.length]}'}"></div>`).join('');
+    col.appendChild(track);
+    wall.appendChild(col);
+  }
+}
+function drawAuthQr(seed = Date.now() % 2147483647) {
+  const c = $('qr-canvas'); if (!c) return;
+  const n = 27, scale = 4, eye = 7;
+  c.width = c.height = n * scale;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillStyle = '#101010';
+  let s = seed;
+  const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  const inEye = (x, y) => (x < eye + 1 && y < eye + 1) || (x >= n - eye - 1 && y < eye + 1) || (x < eye + 1 && y >= n - eye - 1);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!inEye(x, y) && rnd() > .52) ctx.fillRect(x * scale, y * scale, scale, scale);
+  const finder = (px, py) => {
+    ctx.fillStyle = '#101010';
+    ctx.fillRect(px * scale, py * scale, eye * scale, eye * scale);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect((px + 1) * scale, (py + 1) * scale, (eye - 2) * scale, (eye - 2) * scale);
+    ctx.fillStyle = '#101010';
+    ctx.fillRect((px + 2) * scale, (py + 2) * scale, (eye - 4) * scale, (eye - 4) * scale);
+  };
+  finder(0, 0); finder(n - eye, 0); finder(0, n - eye);
+}
+function startAuthQrCountdown() {
+  const label = $('qr-expiry'); if (!label) return;
+  let left = 107;
+  setInterval(() => {
+    if ($('s-auth')?.classList.contains('hidden')) return;
+    left--;
+    if (left <= 0) { left = 120; drawAuthQr(); }
+    label.textContent = `Code expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  }, 1000);
+}
 
 // â”€â”€ Modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.openCreateModal  = () => { $('c-name').value='';$('c-pw').value='';$('c-err').textContent='';$('c-priv').checked=false;$('c-pw-w').classList.add('hidden');$('m-create').classList.remove('hidden');setTimeout(()=>$('c-name').focus(),50); };

@@ -146,4 +146,4 @@ npm start
 # → http://localhost:3000
 ```
 
-**Accounts:** ashish/ashish123 · disha/disha123
+**Accounts:** Create an account from the sign-up screen. Accounts persist in `users.json` in the configured data directory.

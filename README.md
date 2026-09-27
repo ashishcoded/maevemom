@@ -11,14 +11,9 @@ npm start
 
 ---
 
-## 🔑 Pre-seeded Accounts
+## Accounts
 
-| User    | Username | Password   | Color |
-|---------|----------|------------|-------|
-| Ashish  | ashish   | ashish123  | 🔴 Red |
-| Disha   | disha    | disha123   | 🌸 Pink |
-
-Click **Quick Login** buttons for instant 1-click sign in.
+Create an account from the sign-up screen. Accounts are stored in `data/users.json`, so the same username and password continue to work after a server restart. There are no pre-seeded accounts.
 
 ---
 
