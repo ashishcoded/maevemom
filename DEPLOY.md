@@ -133,7 +133,7 @@ PORT=3000
 STORAGE_DIR=/var/data
 ```
 
-Large uploads are sent in sequential 8 MiB chunks, but the hosting service still needs enough disk space for the original video and (when required) a converted playback copy. Configure `STORAGE_DIR` to a persistent volume on the host; without it, the default `public/uploads` and `data/libraries.json` paths are local app storage and may be erased when a hosted instance restarts or redeploys. The server's default library budget is 12 GiB and the per-file limit is 20 GiB; a host's own disk and request limits can be lower.
+Configure `STORAGE_DIR` to a persistent volume on the host. It stores accounts (`users.json`) as well as profiles, sessions, contacts, uploads, and the library index. Without a persistent volume, the host can erase account data on restart or redeploy, causing existing usernames to return "User not found". Large uploads also need enough disk space for the original video and (when required) a converted playback copy. The server's default library budget is 12 GiB and the per-file limit is 20 GiB; a host's own disk and request limits can be lower.
 
 ---
 

@@ -1,1 +1,14 @@
-{}
+{
+  "user_80684d467c": {
+    "id": "user_80684d467c",
+    "username": "ashishyadav",
+    "email": "creative.ashi90@gmail.com",
+    "displayName": "Ashishyadav",
+    "avatar": "A",
+    "avatarColor": "#06b6d4",
+    "avatarUrl": null,
+    "bio": "Movie lover",
+    "passwordHash": "$2a$10$qrJbwez9bdXD/JqrdOvOveLVSiIbW2Wt1g5RfRTOn1X6VJa8Frd42",
+    "createdAt": 1790519445053
+  }
+}

@@ -1191,5 +1191,8 @@ io.on('connection', socket => {
 
 server.listen(PORT,()=>{
   console.log(`\nMaeve'mom v5  →  http://localhost:${PORT}`);
-  console.log(`Loaded ${users.size} account(s). Create an account from the sign-up screen.\n`);
+  console.log(`Loaded ${users.size} account(s) from ${usersFile}`);
+  if (!process.env.DATA_DIR && !process.env.STORAGE_DIR)
+    console.log('Account data is using the local data folder. Hosted deployments need a persistent disk or database.');
+  console.log('Create an account from the sign-up screen.\n');
 });

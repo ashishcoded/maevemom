@@ -13,7 +13,7 @@ npm start
 
 ## Accounts
 
-Create an account from the sign-up screen. Accounts are stored in `data/users.json`, so the same username and password continue to work after a server restart. There are no pre-seeded accounts.
+Create an account from the sign-up screen. On a local server, accounts are stored in `data/users.json`. For hosting, set `STORAGE_DIR` (or `DATA_DIR`) to a persistent disk mount; a temporary host disk can erase accounts during restart or redeploy. There are no pre-seeded accounts.
 
 ---
 
@@ -162,7 +162,7 @@ Uploads support common movie containers such as MP4, MKV, HEVC/H.265 files, AVI,
 
 Browsers do not natively decode every codec (notably many MKV, HEVC/H.265 and AVI downloads). Install [FFmpeg](https://ffmpeg.org/download.html) on the server and ensure `ffmpeg` is on `PATH`, or set `FFMPEG_PATH` to its executable. The app then creates a browser-compatible H.264/AAC MP4 stream automatically when the original cannot play. Conversion runs after upload and can take time for very large movies; upload progress remains separate from conversion progress.
 
-For hosted installs, mount a persistent volume and set `STORAGE_DIR` to its mount path. The video files and library index are stored there. Without a persistent volume, the platform may erase uploads on restart or redeploy, and platform-level upload/disk limits may be lower than the app limits above.
+For hosted installs, mount a persistent volume and set `STORAGE_DIR` to its mount path. Accounts, profiles, sessions, contact lists, video files, and the library index are stored there. Without a persistent volume, a host may erase this data on restart or redeploy. Platform-level upload/disk limits may also be lower than the app limits above.
 
 ---
 
