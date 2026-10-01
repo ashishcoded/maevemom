@@ -133,7 +133,7 @@ PORT=3000
 STORAGE_DIR=/var/data
 ```
 
-Configure `STORAGE_DIR` to a persistent volume on the host. It stores accounts (`users.json`) as well as profiles, sessions, contacts, uploads, and the library index. Without a persistent volume, the host can erase account data on restart or redeploy, causing existing usernames to return "User not found". Large uploads also need enough disk space for the original video and (when required) a converted playback copy. The server's default library budget is 12 GiB and the per-file limit is 20 GiB; a host's own disk and request limits can be lower.
+The Ashish and Disha built-in accounts are recreated at every start, so their default logins remain available on Render Free. Render Free storage is temporary, so username or password changes may reset to the defaults after a restart. A persistent `STORAGE_DIR` preserves those edits and other JSON-backed data. Large uploads also need enough disk space for the original video and (when required) a converted playback copy. The server's default library budget is 12 GiB and the per-file limit is 20 GiB; a host's own disk and request limits can be lower.
 
 ---
 
@@ -146,4 +146,4 @@ npm start
 # → http://localhost:3000
 ```
 
-**Accounts:** Create an account from the sign-up screen. Accounts persist in `users.json` in the configured data directory.
+**Accounts:** Login with `ashish / ashish123` or `disha / disha123`. Signup is disabled.

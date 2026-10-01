@@ -13,7 +13,7 @@ npm start
 
 ## Accounts
 
-Create an account from the sign-up screen. On a local server, accounts are stored in `data/users.json`. For hosting, set `STORAGE_DIR` (or `DATA_DIR`) to a persistent disk mount; a temporary host disk can erase accounts during restart or redeploy. There are no pre-seeded accounts.
+Use one of the built-in accounts: `ashish / ashish123` or `disha / disha123`. Signup is disabled. Login stays active across server restarts until you sign out. Username and password edits are saved in `data/users.json` when the server has persistent storage.
 
 ---
 
@@ -47,9 +47,9 @@ Incognito tab: Login as disha  → Join Room
 
 ### Auth
 - ✅ Login with username + password
-- ✅ Register new accounts (username, display name, password)
-- ✅ Quick login buttons (Ashish & Disha)
-- ✅ JWT sessions (30-day tokens)
+- ✅ Built-in Ashish and Disha accounts
+- ✅ Username and password changes in profile settings
+- ✅ JWT sessions stay active until sign out
 - ✅ Persistent login across page refresh
 - ✅ Sign out
 

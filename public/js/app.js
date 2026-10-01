@@ -871,7 +871,71 @@ window.toggleOverlayChat = () => {
   revealPlayerUi();
 };
 
-// â”€â”€ Session â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Hero greeting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// A small session-stable greeting rendered just above the MOTU typography that
+// is baked into home-hero.jpg (the image itself is never modified). One
+// greeting is picked per browser session and never repeats back-to-back.
+const HERO_GREETINGS_GENERAL = [
+  'Hello,','Hey,','Hi,','What\'s up,','Welcome back,','Nice to see you,','Hey there,',
+  'How\'s it going,','What\'s happening,','Back again,','Good to have you here,','Nice timing,',
+  'Ready?','Let\'s get started,','What\'s the vibe today,','Good to see you,','Alright,',
+  'Hey you,','Welcome,','Let\'s begin,','Here we go,','What\'s new,','Ready when you are,',
+  'Look who\'s back,','Good to have you back,','Missed this place,','Make yourself at home,'
+];
+const HERO_GREETINGS_TIME = () => {
+  const h = new Date().getHours();
+  if (h < 5) return ['Still up,','Late night,','Good to see you this late,'];
+  if (h < 12) return ['Good morning,','Morning,','Fresh start,'];
+  if (h < 17) return ['Good afternoon,','Hope your day is going well,'];
+  if (h < 22) return ['Good evening,','Evening,','Hope you\'re having a good evening,'];
+  return ['Still up,','Late night,','Good to see you this late,'];
+};
+function pickHeroGreeting() {
+  const last = localStorage.getItem('mm_hero_greeting_last');
+  // Most picks stay general; time-aware options just join the wider pool.
+  const pool = HERO_GREETINGS_GENERAL.concat(HERO_GREETINGS_TIME());
+  const fresh = pool.filter(g => g !== last);
+  const pick = fresh.length ? fresh[Math.floor(Math.random() * fresh.length)] : pool[0];
+  sessionStorage.setItem('mm_hero_greeting', pick);
+  localStorage.setItem('mm_hero_greeting_last', pick);
+  return pick;
+}
+function renderHeroGreeting() {
+  const el = $('hero-greeting');
+  if (!el) return;
+  const greeting = sessionStorage.getItem('mm_hero_greeting') || pickHeroGreeting();
+  if (el.textContent !== greeting) {
+    el.textContent = greeting;
+    el.classList.remove('is-visible');
+    void el.offsetWidth;
+    el.classList.add('is-visible');
+  }
+}
+// The MOTU text lives inside home-hero.jpg (2752x1536) shown with cover /
+// 55% 40%, so its on-screen position is derived from the cover geometry.
+const HERO_IMG_SIZE = { w: 2752, h: 1536 };
+const HERO_MOTU_ANCHOR = { x: 0.103, y: 0.305 };
+function positionHeroGreeting() {
+  const hero = document.querySelector('.cinema-hero[data-panel="home"]');
+  const el = $('hero-greeting');
+  if (!hero || !el) return;
+  const w = hero.clientWidth, h = hero.clientHeight;
+  if (!w || !h) return;
+  const scale = Math.max(w / HERO_IMG_SIZE.w, h / HERO_IMG_SIZE.h);
+  const imgW = HERO_IMG_SIZE.w * scale, imgH = HERO_IMG_SIZE.h * scale;
+  const offX = (w - imgW) * 0.55, offY = (h - imgH) * 0.40;
+  const motuTop = offY + HERO_MOTU_ANCHOR.y * imgH;
+  // On narrow screens the cover crop can push the image text off-screen;
+  // clamp so the greeting stays visible without ever overlapping the nav.
+  const motuLeft = offX + HERO_MOTU_ANCHOR.x * imgW;
+  const x = Math.min(Math.max(motuLeft, 24), Math.max(24, w - 150));
+  el.style.setProperty('--greet-x', Math.round(x) + 'px');
+  el.style.setProperty('--greet-y', Math.round(motuTop) + 'px');
+  el.style.setProperty('--greet-gap', Math.round(Math.min(20, Math.max(8, imgH * 0.016))) + 'px');
+}
+window.addEventListener('resize', positionHeroGreeting);
+
+// â”€â”€ Session â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function persist(u, tok) { S.user=u; S.token=tok; localStorage.setItem('mm_tok',tok); localStorage.setItem('mm_usr',JSON.stringify(u)); }
 function clearSession() { S.user=null; S.token=null; localStorage.removeItem('mm_tok'); localStorage.removeItem('mm_usr'); }
 
@@ -881,6 +945,8 @@ function goRoom() { setScreen('room'); }
 function goHome() {
   setScreen('home');
   openHomeTab('home');
+  positionHeroGreeting();
+  renderHeroGreeting();
   if (!S.user) return;
   const av = $('hn-av');
   av.style.background = S.user.avatarColor;
@@ -938,7 +1004,7 @@ function quickAlertAvatar(person) {
 function renderQuickAlert() {
   const content = $('qa-content'); if (!content) return;
   if (quickAlertMode === 'form') {
-    content.innerHTML = `<form class="qa-form" onsubmit="saveAlertPerson(event)"><label>Name<input id="qa-name" required maxlength="40" autocomplete="name" placeholder="e.g. Mom"></label><label>Phone number<input id="qa-phone" required type="tel" autocomplete="tel" placeholder="+91 XXXXX XXXXX"></label><p class="qa-note">Include country code. Indian 10-digit numbers use +91.</p><div class="qa-actions"><button type="button" class="qa-secondary" onclick="cancelAlertForm(event)">Cancel</button><button class="qa-primary" type="submit">Add Person</button></div><div id="qa-form-error" class="qa-error" role="status"></div></form>`;
+    content.innerHTML = `<form class="qa-form" onsubmit="saveAlertPerson(event)"><label>Name<input id="qa-name" required maxlength="40" autocomplete="name" placeholder=""></label><label>Phone number<input id="qa-phone" required type="tel" autocomplete="tel" placeholder="+91 XXXXX XXXXX"></label><p class="qa-note">Include country code. Indian 10-digit numbers use +91.</p><div class="qa-actions"><button type="button" class="qa-secondary" onclick="cancelAlertForm(event)">Cancel</button><button class="qa-primary" type="submit">Add Person</button></div><div id="qa-form-error" class="qa-error" role="status"></div></form>`;
     return;
   }
   const cards = quickAlertContacts.map(person => `<div class="qa-person">${quickAlertAvatar(person)}<span class="qa-person-info"><strong>${alertEsc(person.name || person.displayName)}</strong><small>${alertEsc(maskAlertPhone(person.phoneNumber))}</small></span><button type="button" class="qa-icon qa-delete" aria-label="Remove ${alertEsc(person.name || person.displayName)}" title="Remove contact" onclick="deleteAlertPerson(event,'${alertEsc(person.id)}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6m4-6v6M5.5 7l1 13h11l1-13M9 7V4h6v3"/></svg></button></div>`).join('');
@@ -1140,21 +1206,12 @@ window.doLogin = async () => {
     if(window._inv){const i=window._inv;window._inv=null;setTimeout(()=>{$('j-id').value=i.room;if(i.pw)$('j-pw').value=i.pw;openJoinModal();},200);}
   } catch(ex){e.textContent=ex.message;}
 };
-window.doRegister = async () => {
-  const u=$('r-user').value.trim(),email=$('r-email').value.trim(),p=$('r-pass').value,e=$('r-err');e.textContent='';
-  if(!u||!email||!p){e.textContent='Fill in all fields';return;}
-  if(p.length<6){e.textContent='Password 6+ chars';return;}
-  try{const{token,user}=await api('POST','/auth/register',{username:u,displayName:u,email,password:p});persist(user,token);goHome();}catch(ex){e.textContent=ex.message;}
-};
 window.signOut = () => { if(S.token)api('POST','/auth/logout',{}).catch(()=>{});closeProfileSwitcher();endCall(); stopAllTimers(); clearRoomSession(); if(S.socket){S.socket.disconnect();S.socket=null;} S.room=null; S.library={items:[],usage:null}; $$('.overlay').forEach(o=>o.classList.add('hidden')); clearSession(); switchAuthTab('login'); goAuth(); };
 
 // ── Auth screen: tab switch, password reveal, poster wall, device QR ──
-window.switchAuthTab = tab => {
-  const login = tab !== 'register';
-  $('f-login').classList.toggle('hidden', !login);
-  $('f-register').classList.toggle('hidden', login);
-  $('auth-title').textContent = login ? 'Welcome back to Maeve\u2019mom' : 'Create your Maeve\u2019mom account';
-  $('auth-sub').textContent = login ? 'Scan the QR code or use your username to log in' : 'Fill in your details to get started';
+window.switchAuthTab = () => {
+  $('auth-title').textContent = 'Welcome back to Maeve\u2019mom';
+  $('auth-sub').textContent = 'Sign in with your username and password';
 };
 window.toggleAuthPw = (id, btn) => { const input = $(id); input.type = input.type === 'password' ? 'text' : 'password'; btn.classList.toggle('is-on'); };
 
@@ -1203,6 +1260,12 @@ const AUTH_POSTERS = [
 
 const AUTH_POSTER_FALLBACKS = AUTH_POSTERS;
 
+document.addEventListener('dragstart', event => {
+  if (event.target.closest?.('#s-auth .auth-poster img, .pf-avatar img, .pf-avatar-choice img')) event.preventDefault();
+});
+document.addEventListener('contextmenu', event => {
+  if (event.target.closest?.('#s-auth .auth-poster, .pf-avatar, .pf-avatar-choice')) event.preventDefault();
+});
 
 ///////////////////////
 function buildAuthPosterWall() {
@@ -2450,6 +2513,7 @@ window.saveProfile=async()=>{
   try{
     const form=new FormData();
     form.append('displayName',$('pf-nm').value.trim());
+    form.append('username',$('pf-username').value.trim());
     if(S.pendingAvFile)form.append('avatar',S.pendingAvFile);
     const r=await fetch('/api/auth/profile',{method:'PATCH',headers:{Authorization:'Bearer '+S.token},body:form});
     const d=await r.json();if(!r.ok){e.textContent=d.error;return;}

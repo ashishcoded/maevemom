@@ -1,14 +1,26 @@
 {
-  "user_80684d467c": {
-    "id": "user_80684d467c",
-    "username": "ashishyadav",
-    "email": "creative.ashi90@gmail.com",
-    "displayName": "Ashishyadav",
+  "user_ashish": {
+    "id": "user_ashish",
+    "username": "ashish",
+    "displayName": "Ashish",
     "avatar": "A",
-    "avatarColor": "#06b6d4",
+    "avatarColor": "#e50914",
     "avatarUrl": null,
     "bio": "Movie lover",
-    "passwordHash": "$2a$10$qrJbwez9bdXD/JqrdOvOveLVSiIbW2Wt1g5RfRTOn1X6VJa8Frd42",
-    "createdAt": 1790519445053
+    "email": null,
+    "passwordHash": "$2a$10$DPOTcf1/AjWKGNvA8bSqcuVEvhQ.kgSSQFQ9UC1hZ7ZBuy8hzgZtu",
+    "createdAt": 1790522196133
+  },
+  "user_disha": {
+    "id": "user_disha",
+    "username": "disha",
+    "displayName": "Disha",
+    "avatar": "D",
+    "avatarColor": "#ff6b9d",
+    "avatarUrl": null,
+    "bio": "Movie lover",
+    "email": null,
+    "passwordHash": "$2a$10$UjsRxmO9k0pvxlWJUgG8NeXRtl233J.xa24M8tvNaeEoWyTJNv7uO",
+    "createdAt": 1790522196349
   }
 }

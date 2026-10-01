@@ -85,9 +85,25 @@ const userProfiles = new Map();
 const deviceSessions = new Map();
 const profilePinFailures = new Map();
 
-for (const [id, user] of Object.entries(readJsonMap(usersFile))) {
-  if (user?.id === id && typeof user.username === 'string' && typeof user.passwordHash === 'string') users.set(id, user);
+const BUILT_IN_ACCOUNTS = [
+  {id:'user_ashish',username:'ashish',displayName:'Ashish',avatarColor:'#e50914',password:'ashish123'},
+  {id:'user_disha',username:'disha',displayName:'Disha',avatarColor:'#ff6b9d',password:'disha123'},
+];
+const savedBuiltInUsers = readJsonMap(usersFile);
+for (const account of BUILT_IN_ACCOUNTS) {
+  const saved = savedBuiltInUsers[account.id] || {};
+  users.set(account.id, {
+    id:account.id, username:saved.username || account.username,
+    displayName:saved.displayName || account.displayName,
+    avatar:saved.avatar || account.displayName[0],
+    avatarColor:saved.avatarColor || account.avatarColor,
+    avatarUrl:saved.avatarUrl || null, bio:saved.bio || 'Movie lover',
+    email:saved.email || null,
+    passwordHash:saved.passwordHash || bcrypt.hashSync(account.password,10),
+    createdAt:saved.createdAt || Date.now(),
+  });
 }
+const builtInUserIds = new Set(BUILT_IN_ACCOUNTS.map(account=>account.id));
 function saveUsers() {
   const tempFile = usersFile + '.tmp';
   try {
@@ -138,7 +154,7 @@ function createSessionToken(userId,profileId,req,sessionId=null) {
   const existing=deviceSessions.get(id);
   deviceSessions.set(id,{id,userId,profileId,createdAt:existing?.createdAt || Date.now(),lastActive:Date.now(),userAgent:String(req.headers['user-agent'] || 'Unknown device').slice(0,240)});
   saveDeviceSessions();
-  return jwt.sign({userId,profileId,sid:id},JWT_SECRET,{expiresIn:'30d'});
+  return jwt.sign({userId,profileId,sid:id},JWT_SECRET);
 }
 for (const [id,record] of Object.entries(readJsonMap(deviceSessionsFile))) if(record?.userId) deviceSessions.set(id,{...record,id});
 for (const [id,list] of Object.entries(readJsonMap(profileFile))) if(Array.isArray(list)) userProfiles.set(id,list);
@@ -178,7 +194,7 @@ async function sendAlertWithProvider() {
 }
 
 // ── Seed ───────────────────────────────────────────────────────────────────────
-// Accounts are persisted in users.json. No demo accounts are created.
+// These two built-in accounts are restored on every server start.
 
 function loadLibraries() {
   try {
@@ -470,7 +486,15 @@ function authMw(req,res,next){
       res.setHeader('X-Auth-Token',replacement);
     }
     if(req.user.sid) {
-      const session=deviceSessions.get(req.user.sid);
+      let session=deviceSessions.get(req.user.sid);
+      if(!session && builtInUserIds.has(req.user.userId)) {
+        const profiles=ensureUserProfiles(req.user.userId);
+        const profileId=profiles.some(profile=>profile.id===req.user.profileId)?req.user.profileId:profiles[0]?.id;
+        createSessionToken(req.user.userId,profileId,req,req.user.sid);
+        req.user.profileId=profileId;
+        res.setHeader('X-Auth-Token',jwt.sign(req.user,JWT_SECRET));
+        session=deviceSessions.get(req.user.sid);
+      }
       if(!session || session.userId!==req.user.userId) return res.status(401).json({error:'This session has been signed out'});
       if(Date.now()-session.lastActive>60000){session.lastActive=Date.now();saveDeviceSessions();}
     }
@@ -480,34 +504,6 @@ function authMw(req,res,next){
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
-app.post('/api/auth/register', async (req,res) => {
-  try {
-    const {username,displayName,email,password}=req.body;
-    if(!username||!displayName||!email||!password) return res.status(400).json({error:'All fields required'});
-    if(password.length<6) return res.status(400).json({error:'Password 6+ chars'});
-    if(!/^[a-z0-9_]{2,20}$/i.test(username)) return res.status(400).json({error:'Username: 2-20 chars (a-z 0-9 _)'});
-    if([...users.values()].find(u=>u.username.toLowerCase()===username.toLowerCase())) return res.status(409).json({error:'Username taken'});
-    const normalizedEmail=String(email).trim().toLowerCase();
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalizedEmail)) return res.status(400).json({error:'Enter a valid email address'});
-    if([...users.values()].find(u=>u.email?.toLowerCase()===normalizedEmail)) return res.status(409).json({error:'Email address already in use'});
-    const clrs=['#e50914','#ff6b9d','#f59e0b','#10b981','#6366f1','#ec4899','#06b6d4','#84cc16'];
-    const id='user_'+uuidv4().replace(/-/g,'').slice(0,10);
-    const passwordHash=await bcrypt.hash(password,10);
-    if([...users.values()].find(u=>u.username.toLowerCase()===username.toLowerCase())) return res.status(409).json({error:'Username taken'});
-    if([...users.values()].find(u=>u.email?.toLowerCase()===normalizedEmail)) return res.status(409).json({error:'Email address already in use'});
-    const user={id,username:username.toLowerCase(),email:normalizedEmail,displayName:displayName.trim(),
-      avatar:displayName.trim()[0].toUpperCase(),
-      avatarColor:clrs[Math.floor(Math.random()*clrs.length)],
-      avatarUrl:null,bio:'Movie lover',
-      passwordHash,createdAt:Date.now()};
-    users.set(id,user);
-    saveUsers();
-    const profile=ensureUserProfiles(id)[0];
-    const token=createSessionToken(id,profile.id,req);
-    res.json({token,user:profileUser(id,profile.id)});
-  } catch(e){res.status(500).json({error:e.message});}
-});
-
 app.post('/api/auth/login', async (req,res) => {
   try {
     const {username,password}=req.body;
@@ -589,6 +585,7 @@ app.post('/api/account/password',authMw,async(req,res)=>{
   if(next.length<6)return res.status(400).json({error:'New password must be at least 6 characters'});
   if(!await bcrypt.compare(current,user.passwordHash))return res.status(401).json({error:'Current password is incorrect'});
   user.passwordHash=await bcrypt.hash(next,10);
+  saveUsers();
   for(const [id,session] of deviceSessions)if(session.userId===user.id&&id!==req.user.sid)disconnectDeviceSession(id);
   saveDeviceSessions();res.json({ok:true});
 });
@@ -669,11 +666,18 @@ app.patch('/api/auth/profile', authMw, uploadAvatar.single('avatar'), async (req
     const u=users.get(req.user.userId);
     if(!u) return res.status(404).json({error:'Not found'});
     const profiles=ensureUserProfiles(u.id),activeProfile=profiles.find(profile=>profile.id===req.user.profileId)||profiles[0];
+    if(req.body.username!==undefined) {
+      const username=String(req.body.username).trim().toLowerCase();
+      if(!/^[a-z0-9_]{2,20}$/.test(username)) return res.status(400).json({error:'Username must be 2-20 characters (a-z, 0-9, _)'});
+      if([...users.values()].some(other=>other.id!==u.id&&other.username.toLowerCase()===username)) return res.status(409).json({error:'That username is already in use'});
+      u.username=username;
+    }
     if(req.body.displayName){const name=req.body.displayName.trim().slice(0,30);if(name){activeProfile.name=name;if(activeProfile.id===profiles[0].id){u.displayName=name;u.avatar=name[0].toUpperCase();}}}
     if(req.body.bio!==undefined) u.bio=String(req.body.bio).slice(0,80);
     if(req.body.avatarColor && /^#[0-9a-f]{6}$/i.test(req.body.avatarColor)){activeProfile.avatarColor=req.body.avatarColor;if(activeProfile.id===profiles[0].id)u.avatarColor=req.body.avatarColor;}
     if(req.file){activeProfile.avatarUrl='/uploads/'+req.file.filename;if(activeProfile.id===profiles[0].id)u.avatarUrl=activeProfile.avatarUrl;}
     if(req.body.password?.length>=6) u.passwordHash=await bcrypt.hash(req.body.password,10);
+    saveUsers();
     saveProfiles();
     res.json({user:profileUser(u.id,activeProfile.id)});
   } catch(e){res.status(500).json({error:e.message});}
@@ -1191,8 +1195,5 @@ io.on('connection', socket => {
 
 server.listen(PORT,()=>{
   console.log(`\nMaeve'mom v5  →  http://localhost:${PORT}`);
-  console.log(`Loaded ${users.size} account(s) from ${usersFile}`);
-  if (!process.env.DATA_DIR && !process.env.STORAGE_DIR)
-    console.log('Account data is using the local data folder. Hosted deployments need a persistent disk or database.');
-  console.log('Create an account from the sign-up screen.\n');
+  console.log(`Ready with ${users.size} built-in accounts: ashish and disha.\n`);
 });
