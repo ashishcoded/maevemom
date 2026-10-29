@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Memory Lane · a little jar of stars</title>
+<meta name="theme-color" content="#FBF4EA">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f6d56a' stroke='%23f6d56a' stroke-width='2' stroke-linejoin='round' d='M12 3l2.6 5.9 6.4.6-4.8 4.2 1.5 6.3-5.7-3.4-5.7 3.4 1.5-6.3L3 9.5l6.4-.6z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Shadows+Into+Light&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{--blue:#2f6db5;--gold:#ffd21f;--rust:#a8523a;--ink:#3b2d22;--mono:"Space Mono",ui-monospace,Menlo,monospace;--serif:"Cormorant Garamond",Georgia,serif;--hand:"Shadows Into Light","Segoe Print",cursive}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;color:var(--ink);font-family:var(--mono);overflow:hidden;
+background:radial-gradient(circle at 20% 16%,rgba(255,236,170,.6),transparent 38%),radial-gradient(circle at 82% 30%,rgba(246,214,225,.5),transparent 46%),radial-gradient(circle at 55% 105%,rgba(248,210,196,.6),transparent 42%),#fbf4ea}
+button,select{font:inherit;color:inherit;cursor:pointer}
+#bg{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.screen{position:fixed;inset:0;z-index:1;opacity:0;visibility:hidden;transition:opacity .7s ease,visibility .7s;overflow-y:auto;overflow-x:hidden}
+.screen.on{opacity:1;visibility:visible}
+/* tape buttons */
+.tb{border:0;background:none;padding:0;filter:drop-shadow(0 2px 2px rgba(110,70,30,.32));transform:rotate(var(--r,0deg));transition:transform .25s}
+.tb:hover{transform:rotate(calc(var(--r,0deg) * -1)) scale(1.05)}
+.tb:active{transform:scale(.97)}
+.tb span{display:flex;gap:8px;align-items:center;justify-content:center;padding:11px 24px;font-size:15px;letter-spacing:.04em;color:#4a3626;background:linear-gradient(100deg,#dfb270,#d0a05b 50%,#dbad69)}
+.tb.big span{padding:15px 34px;font-size:19px}
+.tb.sm span{padding:8px 16px;font-size:13px}
+.tb i{color:var(--rust);font-style:normal}
+.link{background:none;border:0;color:var(--rust);font-size:14px;padding:6px;text-decoration:underline;text-underline-offset:4px}
+.link:hover{opacity:.7}
+/* home */
+#home{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+#home h1{margin:0;font-weight:500;line-height:.95}
+#home h1 b{display:block;font:500 clamp(58px,10.5vw,124px)/1 var(--serif);color:var(--blue);animation:rise 1.4s both}
+#home h1 em{display:block;font:400 clamp(58px,10.5vw,124px)/1 var(--hand);color:var(--gold);margin-top:-.05em;animation:rise 1.4s .25s both}
+#home p{font-size:clamp(13px,1.8vw,17px);line-height:1.8;margin:28px 0 34px;animation:rise 1.4s .5s both}
+#home .acts{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;animation:rise 1.4s .75s both}
+@keyframes rise{from{opacity:0;transform:translateY(18px)}}
+/* jar screen */
+.top{position:fixed;top:14px;right:16px;display:flex;flex-direction:column;gap:12px;align-items:flex-end;z-index:5}
+.back{position:fixed;top:18px;left:20px;z-index:5;display:flex;gap:6px}
+#jarscr{display:flex;flex-direction:column;align-items:center;padding:clamp(60px,12vh,120px) 16px 0}
+h2{font:500 clamp(30px,4.2vw,44px)/1.1 var(--serif);color:var(--blue);margin:0;text-align:center}
+.sub{margin:12px 0 0;font-size:15px;text-align:center}
+.stage{position:relative;width:min(300px,68vw,46vh);aspect-ratio:300/440;margin-top:clamp(22px,5vh,56px);cursor:pointer;flex:none}
+.kraft{position:absolute;left:50%;top:38%;width:240%;height:72%;transform:translateX(-50%);filter:drop-shadow(0 3px 6px rgba(110,70,30,.25))}
+.kraft div{position:absolute;inset:0;background:linear-gradient(135deg,#e0b479,#cf9f5c);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .4 0 0 0 0 .27 0 0 0 0 .1 0 0 0 .25 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),linear-gradient(135deg,#e0b479,#cf9f5c)}
+.jarsvg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+#lid{transition:transform .6s cubic-bezier(.3,1.5,.5,1);transform-box:fill-box;transform-origin:0 100%}
+.open #lid{transform:translate(-8px,-40px) rotate(-14deg)}
+.shake{animation:shake .85s ease-in-out}
+@keyframes shake{0%,100%{transform:rotate(0)}15%{transform:rotate(-4deg)}30%{transform:rotate(4deg)}45%{transform:rotate(-3deg)}60%{transform:rotate(3deg)}80%{transform:rotate(-1deg)}}
+#layer{position:absolute;left:13%;width:74%;top:30%;height:64%;pointer-events:none}
+.js{position:absolute;width:16%;filter:drop-shadow(0 1px 1.5px rgba(80,50,20,.3))}
+/* paper cards */
+.ov{position:fixed;inset:0;z-index:30;background:rgba(251,244,234,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:16px;animation:fade .4s}
+@keyframes fade{from{opacity:0}}
+.floaters{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.floaters img{position:absolute}
+@keyframes drift{0%{opacity:0;transform:translateY(24px) rotate(0)}30%,70%{opacity:.75}100%{opacity:0;transform:translateY(-46px) rotate(50deg)}}
+.pw{position:relative;width:min(520px,100%);max-height:92dvh;filter:drop-shadow(0 8px 14px rgba(90,60,30,.22));animation:unfold .7s cubic-bezier(.2,1.2,.4,1);transform:rotate(-.6deg)}
+@keyframes unfold{from{opacity:0;transform:scale(.55) rotate(-8deg)}}
+.paper{--c:#a8d3b5;position:relative;padding:44px 34px 28px;text-align:center;max-height:92dvh;overflow:auto;background:repeating-linear-gradient(0deg,rgba(0,0,0,.03) 0 1px,transparent 1px 24px),linear-gradient(160deg,color-mix(in srgb,var(--c) 14%,#fffaf2),color-mix(in srgb,var(--c) 48%,#efe7da))}
+.tape{position:absolute;z-index:2;top:-14px;left:50%;width:120px;height:32px;margin-left:-60px;transform:rotate(-2deg);background:linear-gradient(100deg,#d9a73f,#ecc766 40%,#cf9a30);clip-path:polygon(0 0,100% 0,98% 25%,100% 50%,98% 75%,100% 100%,0 100%,2% 75%,0 50%,2% 25%);opacity:.95}
+.x{position:absolute;z-index:3;top:20px;right:22px;border:0;background:none;font-size:26px;line-height:1;color:var(--ink)}
+.quote{font-style:italic;font-size:21px;line-height:1.7;margin:6px 0 18px;white-space:pre-wrap;overflow-wrap:anywhere}
+.quote.long{font-size:16px;line-height:1.6;text-align:left}
+.date{font-size:16px;color:#6b5a4a;margin:0 0 20px}
+.ph{display:block;width:100%;max-height:280px;object-fit:cover;border:7px solid #fffdf8;box-shadow:0 2px 8px rgba(80,50,20,.25);margin:4px 0 18px;transform:rotate(1deg)}
+audio{width:100%;margin:0 0 16px}
+.btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.pbtn{border:0;background:rgba(255,255,255,.62);padding:10px 18px;font-size:14px;border-radius:5px;transition:background .2s,transform .2s}
+.pbtn:hover{background:rgba(255,255,255,.9);transform:translateY(-2px)}
+.paper h3{font:500 34px/1.1 var(--serif);color:var(--blue);margin:0 0 14px}
+textarea{width:100%;min-height:130px;resize:vertical;border:0;outline:0;background:repeating-linear-gradient(0deg,transparent 0 27px,rgba(0,0,0,.09) 27px 28px);font:400 17px/28px var(--mono);color:var(--ink);padding:0 4px;text-align:left}
+.tools{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;margin:14px 0}
+input[type=date]{font:400 14px var(--mono);border:0;background:rgba(255,255,255,.6);padding:8px 10px;border-radius:5px;color:var(--ink)}
+.pick{display:flex;gap:10px;justify-content:center;margin:10px 0 18px}
+.pick button{border:0;background:none;padding:2px;width:38px;height:38px;border-radius:50%;transition:transform .2s}
+.pick button img{width:100%}
+.pick button.on{background:rgba(255,255,255,.75);transform:scale(1.22)}
+.rec{color:#c9472f!important}
+.note{font-size:12px;color:#6b5a4a;margin:12px 0 0}
+/* list */
+#list{padding:clamp(60px,10vh,90px) 16px 40px}
+.wrap{width:min(960px,100%);margin:0 auto}
+.wrap h2{text-align:left;margin-top:30px}
+.bar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:16px 0 34px}
+.bar label{font-size:12px;display:block;margin-bottom:4px;text-align:right}
+.tb select{appearance:none;-webkit-appearance:none;border:0;background:none;padding:2px 14px;text-align:center;font-size:13px;letter-spacing:.04em}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:26px 24px}
+.item{border:0;background:none;padding:0;text-align:left;filter:drop-shadow(0 3px 4px rgba(90,60,30,.2));transform:rotate(var(--r));transition:transform .25s}
+.item:hover{transform:rotate(0) translateY(-4px)}
+.item .paper{padding:18px 20px;text-align:left;max-height:none;overflow:visible}
+.item .paper>div{display:flex;gap:10px;align-items:center}
+.item .paper img{width:18px;flex:none}
+.item q{font-style:italic;font-size:15px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;quotes:none}
+.item small{display:block;margin:10px 0 0 28px;font-size:12px;color:#6b5a4a}
+.empty{padding:40px 0;font-size:15px}
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:4px;z-index:60;font-size:13px;animation:fade .3s;max-width:90vw;text-align:center}
+.app-back{position:fixed;top:16px;left:18px;z-index:70;padding:8px 13px;border:1px solid rgba(74,54,38,.18);border-radius:5px;background:rgba(255,250,242,.72);color:var(--ink);font:13px var(--mono);text-decoration:none;box-shadow:0 2px 8px rgba(90,60,30,.12);backdrop-filter:blur(5px)}
+.app-back:hover{background:#fffaf2;transform:translateY(-1px)}
+.fly{position:fixed;z-index:40;pointer-events:none}
+@media (max-width:700px){.top{flex-direction:row;flex-wrap:wrap;justify-content:flex-end;max-width:62vw;gap:8px}.top .tb span{padding:7px 12px;font-size:12px}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<a class="app-back" href="#" onclick="if(window.parent!==window){window.parent.postMessage({type:'close-memory-lane'},'*');return false;}" aria-label="Back to Maeve'mom">← Maeve'mom</a>
+
+<section class="screen on" id="home">
+  <h1><b>a little jar</b><em>of stars</em></h1>
+  <p>Fold each happy memory into a star.<br>Tap the jar to let one drift back to you.</p>
+  <div class="acts"><button class="tb big" id="h-create"><span><i>✦</i> create a star</span></button><button class="tb" id="h-open" hidden><span>open my jar</span></button></div>
+</section>
+
+<section class="screen" id="jarscr">
+  <div class="back"><button class="link" data-go="home">← home</button></div>
+  <div class="top">
+    <button class="tb sm" id="t-add"><span><i>✚</i> add a star</span></button>
+    <button class="tb sm" id="t-all"><span><i>★</i> view all stars</span></button>
+    <button class="tb sm" id="t-save"><span><i>⇩</i> save backup</span></button>
+  </div>
+  <h2 id="jt">tap the jar</h2>
+  <p class="sub" id="js"></p>
+  <div class="stage" id="jar">
+    <div class="kraft"><div id="kr"></div></div>
+    <svg class="jarsvg" viewBox="0 0 300 440" aria-hidden="true">
+      <defs>
+        <linearGradient id="gl" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".5" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity=".85"/></linearGradient>
+        <linearGradient id="mt" x1="0" x2="1"><stop offset="0" stop-color="#8d9297"/><stop offset=".25" stop-color="#e9ebec"/><stop offset=".55" stop-color="#b6babd"/><stop offset=".85" stop-color="#f3f4f5"/><stop offset="1" stop-color="#8d9297"/></linearGradient>
+        <pattern id="rib" width="4" height="10" patternUnits="userSpaceOnUse"><rect width="1.6" height="10" fill="#6f747a" opacity=".55"/></pattern>
+      </defs>
+      <path d="M64 70Q58 100 38 132Q26 152 26 190V380Q26 420 66 420H234Q274 420 274 380V190Q274 152 262 132Q242 100 236 70Z" fill="url(#gl)" stroke="#c9d1d6" stroke-width="3"/>
+      <path d="M50 382Q50 408 80 410H220Q250 408 250 382" fill="none" stroke="#dfe5e9" stroke-width="5" opacity=".9"/>
+      <path d="M62 66h176v14H62z" fill="url(#mt)" stroke="#9aa0a5" stroke-width="1.5"/>
+      <g id="lid"><rect x="52" y="22" width="196" height="46" rx="5" fill="url(#mt)" stroke="#8d9297" stroke-width="2"/><rect x="52" y="22" width="196" height="46" rx="5" fill="url(#rib)"/><rect x="52" y="22" width="196" height="10" rx="4" fill="#fff" opacity=".35"/></g>
+    </svg>
+    <div id="layer"></div>
+    <svg class="jarsvg" viewBox="0 0 300 440" aria-hidden="true" style="z-index:3"><path d="M44 170V370" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity=".85"/><path d="M60 118Q48 138 44 160" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".7" fill="none"/><path d="M258 190V300" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".6"/></svg>
+  </div>
+  <div style="height:80px;flex:none"></div>
+</section>
+
+<section class="screen" id="list">
+  <div class="back"><button class="link" data-go="jarscr">← back</button></div>
+  <div class="wrap">
+    <h2>your paper stars</h2>
+    <p class="sub" id="ls" style="text-align:left"></p>
+    <div class="bar"><span><button class="link" id="restore">restore a backup</button></span>
+      <div><label for="flt">filter by date</label><span class="tb sm" style="display:block"><span><select id="flt"></select></span></span></div></div>
+    <div class="grid" id="grid"></div>
+  </div>
+</section>
+
+<script>
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const COLORS = ['#f5a58c', '#f4a6c4', '#f6d56a', '#a8d3b5', '#bda8e4', '#9ccff0'];
+const fmt = t => new Date(t).toLocaleDateString('en-US', {month: 'long', day: 'numeric', year: 'numeric'});
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
+const rnd = (a, b) => a + Math.random() * (b - a);
+function torn(e, amp = 2, step = 5) {
+  const j = () => (Math.random() * amp).toFixed(1), p = [];
+  for (let x = 0; x <= 100; x += step) p.push(`${x}% ${j()}%`);
+  for (let y = step; y <= 100 - step; y += step) p.push(`${100 - j()}% ${y}%`);
+  for (let x = 100; x >= 0; x -= step) p.push(`${x}% ${100 - j()}%`);
+  for (let y = 100 - step; y >= step; y -= step) p.push(`${j()}% ${y}%`);
+  e.style.clipPath = `polygon(${p.join(',')})`;
+}
+function tapeBtns(root = document) { root.querySelectorAll('.tb').forEach(b => { b.style.setProperty('--r', rnd(-1.6, 1.6).toFixed(1) + 'deg'); const s = b.firstElementChild; if (s && s.tagName === 'SPAN') torn(s, 10, 8); }); }
+function toast(t) { const d = el('div', 'toast'); d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 3200); }
+function seeded(seed) { let h = 1779033703 ^ seed.length; for (let i = 0; i < seed.length; i++) { h = Math.imul(h ^ seed.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; } let a = h >>> 0; return () => { a += 0x6D2B79F5; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ---------- origami paper stars (drawn once per colour) ----------
+function makeStar(col) {
+  const S = 128, c = el('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d'), cx = S / 2, cy = S / 2 + 3, R = S * .45, r = R * .54;
+  const P = (k, rad) => { const a = -Math.PI / 2 + k * Math.PI / 5; return [cx + Math.cos(a) * rad, cy + Math.sin(a) * rad]; };
+  const path = () => { x.beginPath(); for (let k = 0; k < 10; k++) { const p = P(k, k % 2 ? r : R); k ? x.lineTo(...p) : x.moveTo(...p); } x.closePath(); };
+  x.lineJoin = 'round'; x.lineCap = 'round';
+  path(); x.fillStyle = col; x.strokeStyle = col; x.lineWidth = 9; x.shadowColor = 'rgba(110,70,40,.3)'; x.shadowBlur = 5; x.shadowOffsetY = 2; x.fill(); x.stroke();
+  x.shadowColor = 'transparent';
+  for (let k = 0; k < 5; k++) {
+    const o = P(2 * k, R), l = P(2 * k - 1, r), rr = P(2 * k + 1, r);
+    x.beginPath(); x.moveTo(cx, cy); x.lineTo(...o); x.lineTo(...l); x.closePath(); x.fillStyle = 'rgba(255,255,255,.3)'; x.fill();
+    x.beginPath(); x.moveTo(cx, cy); x.lineTo(...o); x.lineTo(...rr); x.closePath(); x.fillStyle = 'rgba(80,40,20,.13)'; x.fill();
+  }
+  path(); x.strokeStyle = 'rgba(90,50,30,.16)'; x.lineWidth = 1.6; x.stroke();
+  return c;
+}
+const SPR = {}, URLS = {};
+COLORS.forEach(c => SPR[c] = makeStar(c));
+const url = c => URLS[c] || (URLS[c] = SPR[c].toDataURL());
+const sImg = (c, cls) => { const i = el('img', cls); i.src = url(c); i.alt = ''; i.draggable = false; return i; };
+
+// ---------- falling stars that pile up on the home screen ----------
+const bg = $('#bg'), g = bg.getContext('2d');
+const COL = 8, parts = [], landed = [];
+let bw = 0, bh = 0, dpr = 1, hgt = [], bgOn = true, lastT = 0, nextSpawn = 0;
+function sizeBg() {
+  dpr = Math.min(devicePixelRatio || 1, 2); bw = innerWidth; bh = innerHeight;
+  bg.width = bw * dpr; bg.height = bh * dpr;
+  hgt = new Array(Math.ceil(bw / COL) + 2).fill(0); landed.length = 0;
+}
+function spawn(anywhere) {
+  parts.push({x: rnd(0, bw), y: anywhere ? rnd(-20, bh * .8) : -50, s: rnd(16, 42), rot: rnd(0, 6.28), vr: rnd(-.012, .012), vy: rnd(.28, .7), sw: rnd(.15, .45), ph: rnd(0, 6.28), c: COLORS[Math.floor(Math.random() * 6)], a: 1, fade: false});
+}
+function bgFrame(t) {
+  if (!bgOn) return;
+  requestAnimationFrame(bgFrame);
+  const dt = Math.min(t - lastT, 50) / 16.7; lastT = t;
+  if (t > nextSpawn) { spawn(false); nextSpawn = t + (landed.length < 110 ? 260 : 2200); }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, bw, bh);
+  for (const l of landed) { g.save(); g.translate(l.x, l.y); g.rotate(l.rot); g.drawImage(SPR[l.c], -l.s / 2, -l.s / 2, l.s, l.s); g.restore(); }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.y += p.vy * dt; p.x += Math.sin(t * .0006 + p.ph) * p.sw * dt; p.rot += p.vr * dt;
+    if (p.fade) { p.a -= .03 * dt; if (p.a <= 0) { parts.splice(i, 1); continue; } }
+    else {
+      const c0 = Math.max(0, Math.floor((p.x - p.s * .4) / COL)), c1 = Math.min(hgt.length - 1, Math.floor((p.x + p.s * .4) / COL));
+      let mh = 0; for (let c = c0; c <= c1; c++) mh = Math.max(mh, hgt[c]);
+      if (p.y + p.s * .32 >= bh - mh) {
+        if (mh > bh * .13) p.fade = true;
+        else {
+          landed.push({x: p.x, y: bh - mh - p.s * .3, s: p.s, rot: p.rot, c: p.c});
+          for (let c = c0 - 2; c <= c1 + 2; c++) if (c >= 0 && c < hgt.length) { const d = Math.abs(c * COL - p.x) / (p.s * .6); hgt[c] = Math.max(hgt[c], mh + p.s * .42 * Math.max(0, 1 - d * .7)); }
+          parts.splice(i, 1); continue;
+        }
+      }
+    }
+    g.globalAlpha = p.a; g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.drawImage(SPR[p.c], -p.s / 2, -p.s / 2, p.s, p.s); g.restore(); g.globalAlpha = 1;
+  }
+}
+function bgStart() { if (bgOn && lastT) return; bgOn = true; lastT = performance.now(); requestAnimationFrame(bgFrame); }
+function bgStop() { bgOn = false; lastT = 0; g.clearRect(0, 0, bw, bh); }
+sizeBg(); for (let i = 0; i < 16; i++) spawn(true);
+addEventListener('resize', () => { sizeBg(); });
+
+// ---------- persistent server storage ----------
+const authToken = () => localStorage.getItem('mm_tok') || '';
+async function memoryApi(method, path, body) {
+  const headers = {'Content-Type':'application/json'};
+  if (authToken()) headers.Authorization = 'Bearer ' + authToken();
+  const r = await fetch('/api' + path, {method, headers, body:body === undefined ? undefined : JSON.stringify(body)});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || 'Could not save memory');
+  return data;
+}
+const blobToData = blob => new Promise((ok, no) => { if (!blob) return ok(null); const f = new FileReader(); f.onload=()=>ok(f.result); f.onerror=no; f.readAsDataURL(blob); });
+const dataToBlob = async value => value ? await (await fetch(value)).blob() : null;
+const db = {
+  async open() {},
+  async all() {
+    const result = await memoryApi('GET','/memories');
+    return Promise.all((result.items || []).map(async item => ({...item, img:await dataToBlob(item.img), audio:await dataToBlob(item.audio)})));
+  },
+  async put(m) {
+    const item = {...m, img:await blobToData(m.img), audio:await blobToData(m.audio)};
+    await memoryApi('POST','/memories', item);
+  },
+  async del(id) { await memoryApi('DELETE','/memories/' + encodeURIComponent(id)); }
+};
+let mem = [], busy = false, lastPull = null;
+
+// ---------- navigation ----------
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id));
+  id === 'home' ? bgStart() : bgStop();
+  if (id === 'jarscr') renderJar();
+  if (id === 'list') renderList();
+  $('#h-open').hidden = !mem.length;
+}
+document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+
+// ---------- jar ----------
+const jar = $('#jar'), layer = $('#layer');
+function jarStar(m, i) {
+  const r = seeded(m.id), row = Math.floor(i / 5);
+  const y = row * 8 < 80 ? 1 + row * 8 + r() * 4 : 3 + r() * 78;
+  const e = sImg(m.color, 'js');
+  e.dataset.id = m.id;
+  e.style.cssText = `left:${1 + r() * 82}%;bottom:${y}%;z-index:${i};transform:rotate(${(r() * 140 - 70).toFixed(0)}deg)`;
+  return e;
+}
+function renderJar() {
+  layer.innerHTML = ''; mem.forEach((m, i) => layer.append(jarStar(m, i)));
+  const n = mem.length;
+  $('#jt').textContent = n ? 'tap the jar' : 'the jar is empty';
+  $('#js').textContent = !n ? 'add your first happy memory.' : n === 1 ? 'one paper star waits inside.' : `${n} paper stars wait inside.`;
+}
+async function dropStar(m) {
+  mem.push(m); mem.sort((a, b) => a.made - b.made);
+  const e = jarStar(m, mem.length - 1); e.style.opacity = 0; layer.append(e);
+  jar.classList.add('open'); await sleep(600);
+  const fall = jar.offsetHeight * .85; e.style.opacity = 1;
+  await e.animate([
+    {translate: `0 -${fall}px`, rotate: '-120deg', opacity: 0, offset: 0},
+    {opacity: 1, offset: .15},
+    {translate: '0 0', rotate: '0deg', offset: .78, easing: 'ease-out'},
+    {translate: '0 -12px', offset: .9, easing: 'ease-in'},
+    {translate: '0 0', offset: 1}
+  ], {duration: 2600, easing: 'cubic-bezier(.35,.1,.5,1)'}).finished;
+  jar.classList.remove('open'); renderJar();
+}
+async function pull() {
+  if (busy) return;
+  if (!mem.length) return toast('the jar is empty, add a star first');
+  busy = true;
+  const pool = mem.length > 1 ? mem.filter(m => m.id !== lastPull) : mem;
+  const m = pool[Math.floor(Math.random() * pool.length)]; lastPull = m.id;
+  jar.classList.add('shake', 'open'); await sleep(850);
+  const s = layer.querySelector(`[data-id="${m.id}"]`), rc = s.getBoundingClientRect();
+  const f = sImg(m.color, 'fly');
+  f.style.cssText = `left:${rc.left}px;top:${rc.top}px;width:${rc.width}px`; document.body.append(f); s.style.visibility = 'hidden';
+  const dx = innerWidth / 2 - (rc.left + rc.width / 2), dy = innerHeight / 2 - (rc.top + rc.height / 2);
+  await f.animate([
+    {transform: 'none'},
+    {transform: `translate(${dx * .25}px,${dy * .25 - 110}px) scale(2.2) rotate(140deg)`, offset: .5},
+    {transform: `translate(${dx}px,${dy}px) scale(5.5) rotate(360deg)`, opacity: .1}
+  ], {duration: 1000, easing: 'ease-in-out'}).finished;
+  f.remove(); jar.classList.remove('shake', 'open'); s.style.visibility = ''; busy = false;
+  showMemory(m, true);
+}
+jar.onclick = pull;
+
+// ---------- memory card ----------
+function overlay(card, color) {
+  const o = el('div', 'ov'), fl = el('div', 'floaters');
+  for (let i = 0; i < 36; i++) { const im = sImg(color || COLORS[3]); im.style.cssText = `left:${rnd(0, 100)}%;top:${rnd(0, 100)}%;width:${rnd(9, 26)}px;opacity:0;animation:drift ${rnd(6, 13)}s ease-in-out ${-rnd(0, 10)}s infinite`; fl.append(im); }
+  o.append(fl, card);
+  const close = () => { o.remove(); document.removeEventListener('keydown', esc); o.onclose && o.onclose(); };
+  const esc = e => { if (e.key === 'Escape') close(); };
+  o.addEventListener('mousedown', e => { if (e.target === o) close(); });
+  document.addEventListener('keydown', esc); o.close = close; document.body.append(o); return o;
+}
+function paperWrap(color) {
+  const pw = el('div', 'pw'), p = el('div', 'paper'); p.style.setProperty('--c', color);
+  pw.append(el('div', 'tape')); const sh = el('div'); sh.append(p); torn(p, 1.4, 4); pw.append(sh);
+  const x = el('button', 'x', '×'); x.setAttribute('aria-label', 'close'); pw.append(x);
+  return {pw, p, x};
+}
+function showMemory(m, fromJar) {
+  const {pw, p, x} = paperWrap(m.color), urls = [];
+  if (m.img) { const i = el('img', 'ph'); i.alt = 'memory photo'; i.src = URL.createObjectURL(m.img); urls.push(i.src); p.append(i); }
+  if (m.text) { const q = el('p', 'quote' + (m.text.length > 140 ? ' long' : '')); q.textContent = '“' + m.text + '”'; p.append(q); }
+  if (m.audio) { const a = el('audio'); a.controls = true; a.src = URL.createObjectURL(m.audio); urls.push(a.src); p.append(a); }
+  const d = el('p', 'date'); d.textContent = fmt(m.t); p.append(d);
+  const row = el('div', 'btns'), back = el('button', 'pbtn'), more = el('button', 'pbtn'), del = el('button', 'link');
+  back.textContent = fromJar ? 'tuck it back' : 'close'; more.textContent = 'unfold another'; del.textContent = 'let this star go';
+  row.append(back); if (fromJar) row.append(more); p.append(row, el('div', 'note')); p.lastChild.append(del);
+  const o = overlay(pw, m.color); o.onclose = () => urls.forEach(URL.revokeObjectURL);
+  x.onclick = back.onclick = () => o.close();
+  more.onclick = () => { o.close(); pull(); };
+  del.onclick = async () => {
+    if (!confirm('Let this star go for good?')) return;
+    await db.del(m.id); mem = mem.filter(z => z.id !== m.id); o.close(); renderJar(); renderList(); $('#h-open').hidden = !mem.length;
+  };
+}
+
+// ---------- create a star ----------
+let rec = null;
+function newStar() {
+  const st = {color: COLORS[Math.floor(Math.random() * 6)], img: null, audio: null, url: null};
+  const {pw, p, x} = paperWrap(st.color);
+  p.insertAdjacentHTML('beforeend', `<h3>fold a new star</h3>
+    <textarea id="txt" maxlength="3000" placeholder="what made you happy? write it before it slips away…"></textarea>
+    <div class="tools"><button class="tb sm" id="ph"><span>+ add photo</span></button><button class="tb sm" id="vo"><span>+ voice note</span></button><input type="date" id="dt"></div>
+    <div id="prev"></div><div class="pick"></div>
+    <div class="btns"><button class="tb" id="save"><span><i>✦</i> fold it</span></button></div>
+    <p class="note">saved securely to your account and available after a server restart.</p>`);
+  const pick = $('.pick', p);
+  COLORS.forEach(c => { const b = el('button'); b.append(sImg(c)); b.setAttribute('aria-label', 'star colour'); b.onclick = () => { st.color = c; p.style.setProperty('--c', c); [...pick.children].forEach(z => z.classList.toggle('on', z === b)); }; if (c === st.color) b.classList.add('on'); pick.append(b); });
+  const t = new Date(); $('#dt', p).value = new Date(t - t.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  const o = overlay(pw, st.color); tapeBtns(pw);
+  const prev = $('#prev', p), stopRec = () => { if (rec && rec.state === 'recording') rec.stop(); };
+  o.onclose = () => { stopRec(); if (rec) rec.stream.getTracks().forEach(z => z.stop()); if (st.url) URL.revokeObjectURL(st.url); };
+  x.onclick = () => o.close(); setTimeout(() => $('#txt', p).focus(), 600);
+  const draw = () => {
+    prev.innerHTML = '';
+    if (st.img) { if (st.url) URL.revokeObjectURL(st.url); st.url = URL.createObjectURL(st.img); const i = el('img', 'ph'); i.src = st.url; prev.append(i); }
+    if (st.audio) { const a = el('audio'); a.controls = true; a.src = URL.createObjectURL(st.audio); prev.append(a); }
+  };
+  $('#ph', p).onclick = () => { const f = el('input'); f.type = 'file'; f.accept = 'image/*'; f.onchange = async () => { if (f.files[0]) { st.img = await shrink(f.files[0]); draw(); } }; f.click(); };
+  const vo = $('#vo', p), vs = vo.firstElementChild;
+  vo.onclick = async () => {
+    if (rec && rec.state === 'recording') return rec.stop();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('voice notes need https or localhost');
+    let stream; try { stream = await navigator.mediaDevices.getUserMedia({audio: true}); } catch (e) { return toast('microphone is blocked, allow it in the address bar'); }
+    const chunks = []; rec = new MediaRecorder(stream); rec.stream = stream;
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = () => { stream.getTracks().forEach(z => z.stop()); clearInterval(tm); vs.classList.remove('rec'); vs.textContent = '+ record again'; st.audio = new Blob(chunks, {type: rec.mimeType || 'audio/webm'}); draw(); };
+    const t0 = Date.now(); rec.start(); vs.classList.add('rec');
+    const tm = setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); vs.textContent = `● stop ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; if (s >= 180) rec.stop(); }, 250);
+  };
+  $('#save', p).onclick = async () => {
+    stopRec(); await sleep(150);
+    const text = $('#txt', p).value.trim();
+    if (!text && !st.img && !st.audio) return toast('add some words, a photo or a voice note first');
+    const m = {id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), t: new Date($('#dt', p).value + 'T12:00').getTime() || Date.now(), made: Date.now(), text, color: st.color, img: st.img, audio: st.audio};
+    await db.put(m); o.close(); go('jarscr');
+    mem = mem.filter(z => z.id !== m.id); layer.innerHTML = ''; mem.forEach((z, i) => layer.append(jarStar(z, i)));
+    await sleep(900); dropStar(m);
+  };
+}
+function shrink(file) {
+  return new Promise((ok, no) => {
+    const u = URL.createObjectURL(file), im = new Image();
+    im.onload = () => { const k = Math.min(1, 1280 / Math.max(im.width, im.height)), c = el('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(u); c.toBlob(b => ok(b), 'image/jpeg', .85); };
+    im.onerror = () => { URL.revokeObjectURL(u); toast('could not read that image'); no(new Error('bad image')); };
+    im.src = u;
+  });
+}
+
+// ---------- all stars ----------
+const flt = $('#flt');
+function renderList() {
+  const days = [...new Set(mem.map(m => fmt(m.t)))], cur = flt.value;
+  flt.innerHTML = '<option value="">all dates</option>' + days.map(d => `<option>${d}</option>`).join('');
+  flt.value = days.includes(cur) ? cur : '';
+  const list = [...mem].sort((a, b) => b.t - a.t).filter(m => !flt.value || fmt(m.t) === flt.value), grid = $('#grid');
+  $('#ls').textContent = `${mem.length} folded and kept.`;
+  grid.innerHTML = '';
+  if (!list.length) grid.append(el('p', 'empty', 'no stars here yet.'));
+  list.forEach(m => {
+    const b = el('button', 'item'), p = el('div', 'paper'), r = el('div');
+    p.style.setProperty('--c', m.color); b.style.setProperty('--r', rnd(-1.2, 1.2).toFixed(1) + 'deg');
+    const q = el('q'); q.textContent = m.text || (m.img ? 'a photo memory' : 'a voice note');
+    r.append(sImg(m.color), q);
+    const s = el('small'); s.textContent = fmt(m.t) + (m.img ? '  · photo' : '') + (m.audio ? '  · voice' : '');
+    p.append(r, s); const w = el('div'); w.append(p); b.append(w); torn(p, 4, 6);
+    b.onclick = () => showMemory(m, false); grid.append(b);
+  });
+}
+flt.onchange = renderList;
+
+// ---------- backup ----------
+const b64 = b => new Promise(r => { if (!b) return r(null); const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
+async function exportAll() {
+  if (!mem.length) return toast('nothing to back up yet');
+  const out = []; for (const m of mem) out.push({...m, img: await b64(m.img), audio: await b64(m.audio)});
+  const a = el('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], {type: 'application/json'})); a.download = 'my-jar-of-stars.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+async function importAll(file) {
+  if (!file) return;
+  const data = JSON.parse(await file.text()), have = new Set(mem.map(m => m.id)); let n = 0;
+  for (const m of data) { if (have.has(m.id)) continue; m.img = m.img ? await (await fetch(m.img)).blob() : null; m.audio = m.audio ? await (await fetch(m.audio)).blob() : null; await db.put(m); mem.push(m); n++; }
+  mem.sort((a, b) => a.made - b.made); renderList(); toast(n + ' stars added back'); $('#h-open').hidden = !mem.length;
+}
+
+// ---------- boot ----------
+['h-create', 't-add'].forEach(i => $('#' + i).onclick = newStar);
+$('#h-open').onclick = () => go('jarscr');
+$('#t-all').onclick = () => go('list');
+$('#t-save').onclick = exportAll;
+$('#restore').onclick = () => { const f = el('input'); f.type = 'file'; f.accept = '.json'; f.onchange = () => importAll(f.files[0]); f.click(); };
+torn($('#kr'), 1.6, 3);
+tapeBtns();
+(async () => {
+  await db.open(); mem = (await db.all()).sort((a, b) => a.made - b.made); $('#h-open').hidden = !mem.length;
+  lastT = performance.now(); requestAnimationFrame(bgFrame);
+})();
+</script>
+</body>
+</html>

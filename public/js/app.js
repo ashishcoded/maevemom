@@ -1004,6 +1004,24 @@ window.closeMagicCanvas = () => {
   // Releasing the iframe also releases the camera when the canvas is closed.
   if (frame) frame.src = 'about:blank';
 };
+window.openMemoryLane = event => {
+  event?.preventDefault(); event?.stopPropagation(); closeProfileMenu();
+  const overlay=$('m-memory-lane'), frame=$('memory-lane-frame');
+  if(!overlay||!frame)return;
+  if(frame.getAttribute('src')==='about:blank')frame.src='/memory-lane.html';
+  overlay.classList.add('memory-lane-fullscreen');
+  overlay.classList.remove('hidden');
+  document.body.classList.add('magic-canvas-open');
+};
+window.closeMemoryLane = () => {
+  const overlay=$('m-memory-lane'), frame=$('memory-lane-frame');
+  overlay?.classList.add('hidden'); document.body.classList.remove('magic-canvas-open');
+  overlay?.classList.remove('memory-lane-fullscreen');
+  if(frame)frame.src='about:blank';
+};
+window.addEventListener('message', event => {
+  if(event.data?.type === 'close-memory-lane') closeMemoryLane();
+});
 let quickAlertContacts = [];
 let quickAlertMode = 'list';
 const alertEsc = value => String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -1080,7 +1098,7 @@ document.addEventListener('click', event => {
   if (!event.target.closest('.hn-profile-wrap')) closeProfileMenu();
 });
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') { if($('change-avatar-overlay')?.classList.contains('is-open')){closeChangeAvatar();return;} closeQuickAlert(); closeProfileMenu(); }
+  if (event.key === 'Escape') { if($('change-avatar-overlay')?.classList.contains('is-open')){closeChangeAvatar();return;} if(!$('m-memory-lane')?.classList.contains('hidden')){closeMemoryLane();return;} if(!$('m-magic-canvas')?.classList.contains('hidden')){closeMagicCanvas();return;} closeQuickAlert(); closeProfileMenu(); }
 });
 function setScreen(n) {
   ['auth','home','room'].forEach(s => {

@@ -73,8 +73,7 @@
             <button onclick="openHomeTab('party')"><svg viewBox="0 0 24 24"><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01M22 8h.01M15 2h.01M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11-.11.7-.72 1.22-1.43 1.22H17"/><path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2z"/></svg>Watch Party</button>
           </div>
           <div class="hn-profile-links">
-            <!-- visual only: there is no ads setting, so this switch is a static display -->
-            <div class="hn-row is-static"><svg viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>Show ads<span class="hn-switch" aria-hidden="true"></span></div>
+            <button type="button" onclick="openMemoryLane(event)" aria-label="Open Memory Lane"><svg viewBox="0 0 24 24"><path d="m12 2.5 1.45 5.02L18.5 9l-5.05 1.48L12 15.5l-1.45-5.02L5.5 9l5.05-1.48L12 2.5Z"/><path d="m19 14.5.7 2.3L22 17.5l-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7.7-2.3Z"/></svg>Memory Lane</button>
           </div>
           <div class="hn-profile-links hn-profile-account">
             <button onclick="openProfileSwitcher(event)"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M16 11h6"/></svg>Switch profile</button>
@@ -626,6 +625,16 @@
       <button class="mx" type="button" onclick="closeMagicCanvas()" aria-label="Close Magic Canvas">&times;</button>
     </div>
     <iframe id="magic-canvas-frame" title="Magic Canvas hand interaction" allow="camera *; fullscreen" src="about:blank"></iframe>
+  </div>
+</div>
+
+<div class="overlay hidden magic-canvas-overlay memory-lane-overlay" id="m-memory-lane" onclick="if(event.target===this)closeMemoryLane()">
+  <div class="magic-canvas-modal memory-lane-modal" role="dialog" aria-modal="true" aria-labelledby="memory-lane-title">
+    <div class="magic-canvas-header">
+      <div><h3 id="memory-lane-title">Memory Lane</h3><p>Your little jar of stars, safely kept on your account.</p></div>
+      <button class="mx" type="button" onclick="closeMemoryLane()" aria-label="Close Memory Lane">&times;</button>
+    </div>
+    <iframe id="memory-lane-frame" title="Memory Lane jar of stars" allow="microphone *; fullscreen" src="about:blank"></iframe>
   </div>
 </div>
 

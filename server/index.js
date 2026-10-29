@@ -19,7 +19,7 @@ const io     = new Server(server, {
   transports: ['websocket', 'polling'],
 });
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '30mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 const JWT_SECRET = process.env.JWT_SECRET || 'maevemom_v5_9Tz4Rp2X';
@@ -41,6 +41,7 @@ const alertContactsFile = path.join(dataDir, 'alert-contacts.json');
 const profileFile = path.join(dataDir, 'profiles.json');
 const deviceSessionsFile = path.join(dataDir, 'device-sessions.json');
 const usersFile = path.join(dataDir, 'users.json');
+const memoriesFile = path.join(dataDir, 'memories.json');
 
 const mkStore = pfx => multer.diskStorage({
   destination: (_, __, cb) => cb(null, uploadsDir),
@@ -83,6 +84,7 @@ const alertContacts = new Map(); // userId → private saved alert contacts
 const alertSendTimes = new Map();
 const userProfiles = new Map();
 const deviceSessions = new Map();
+const memories = new Map(); // userId → persistent jar memories
 const profilePinFailures = new Map();
 
 const BUILT_IN_ACCOUNTS = [
@@ -119,6 +121,29 @@ function readJsonMap(file) {
   try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file,'utf8')) : {}; }
   catch (error) { console.error(`Failed to load ${path.basename(file)}:`,error.message); return {}; }
 }
+function saveMemories() {
+  const tempFile = memoriesFile + '.tmp';
+  try {
+    fs.writeFileSync(tempFile, JSON.stringify(Object.fromEntries(memories), null, 2), 'utf8');
+    fs.renameSync(tempFile, memoriesFile);
+  } catch (error) {
+    try { fs.unlinkSync(tempFile); } catch {}
+    throw error;
+  }
+}
+for (const [id, list] of Object.entries(readJsonMap(memoriesFile))) if (Array.isArray(list)) memories.set(id, list);
+function getMemories(userId) {
+  if (!memories.has(userId)) memories.set(userId, []);
+  return memories.get(userId);
+}
+const memoryDataUrl = (value, kind) => {
+  const raw = String(value || '');
+  const re = kind === 'image' ? /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i : /^data:audio\/(webm|ogg|mp4|mpeg|wav|x-wav);base64,[A-Za-z0-9+/=]+$/i;
+  if (!raw) return null;
+  if (!re.test(raw)) throw new Error(`Invalid ${kind} attachment`);
+  if (Buffer.from(raw.split(',')[1], 'base64').length > (kind === 'image' ? 6 : 12) * 1024 * 1024) throw new Error(`${kind} attachment is too large`);
+  return raw;
+};
 function saveProfiles() { fs.writeFileSync(profileFile,JSON.stringify(Object.fromEntries(userProfiles),null,2),'utf8'); }
 function saveDeviceSessions() { fs.writeFileSync(deviceSessionsFile,JSON.stringify(Object.fromEntries(deviceSessions),null,2),'utf8'); }
 function disconnectDeviceSession(sessionId) {
@@ -594,6 +619,31 @@ app.delete('/api/account/sessions/:id',authMw,(req,res)=>{
   const session=deviceSessions.get(req.params.id);
   if(!session||session.userId!==req.user.userId)return res.status(404).json({error:'Session not found'});
   disconnectDeviceSession(req.params.id);saveDeviceSessions();res.json({ok:true,current:req.params.id===req.user.sid});
+});
+
+// ── Memory Lane / jar-of-stars ──────────────────────────────────────────────
+app.get('/api/memories', authMw, (req,res) => {
+  res.json({items:getMemories(req.user.userId).slice().sort((a,b)=>(a.made||0)-(b.made||0))});
+});
+app.post('/api/memories', authMw, (req,res) => {
+  try {
+    const body=req.body||{}, text=String(body.text||'').trim().slice(0,3000);
+    const color=/^#[0-9a-f]{6}$/i.test(String(body.color||''))?String(body.color):'#f5a58c';
+    const id=String(body.id||uuidv4()).slice(0,80);
+    const t=Number(body.t)||Date.now(), made=Number(body.made)||Date.now();
+    const image=memoryDataUrl(body.img,'image'), audio=memoryDataUrl(body.audio,'audio');
+    if(!text&&!image&&!audio)return res.status(400).json({error:'Add text, a photo, or a voice note first'});
+    const list=getMemories(req.user.userId), existing=list.findIndex(item=>item.id===id);
+    if(existing<0 && list.length>=300)return res.status(400).json({error:'Memory Lane is full. Remove an old memory first.'});
+    const item={id,t,made,text,color,img:image,audio};
+    if(existing<0)list.push(item);else list[existing]=item;
+    saveMemories();res.status(existing<0?201:200).json({item});
+  } catch(error) { res.status(400).json({error:error.message||'Could not save memory'}); }
+});
+app.delete('/api/memories/:id', authMw, (req,res) => {
+  const list=getMemories(req.user.userId), index=list.findIndex(item=>item.id===req.params.id);
+  if(index<0)return res.status(404).json({error:'Memory not found'});
+  list.splice(index,1);saveMemories();res.json({ok:true});
 });
 
 app.get('/api/alerts/contacts', authMw, (req,res) => {
