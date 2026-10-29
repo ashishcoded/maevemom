@@ -983,6 +983,27 @@ function closeProfileMenu() {
   wrap?.classList.remove('is-open');
   button?.setAttribute('aria-expanded', 'false');
 }
+window.openMagicCanvas = event => {
+  event?.preventDefault();
+  event?.stopPropagation();
+  closeProfileMenu();
+  const overlay = $('m-magic-canvas');
+  const frame = $('magic-canvas-frame');
+  if (!overlay || !frame) return;
+  if (frame.src === 'about:blank' || !frame.getAttribute('src') || frame.getAttribute('src') === 'about:blank') {
+    frame.src = '/magic-canvas.html';
+  }
+  overlay.classList.remove('hidden');
+  document.body.classList.add('magic-canvas-open');
+};
+window.closeMagicCanvas = () => {
+  const overlay = $('m-magic-canvas');
+  const frame = $('magic-canvas-frame');
+  overlay?.classList.add('hidden');
+  document.body.classList.remove('magic-canvas-open');
+  // Releasing the iframe also releases the camera when the canvas is closed.
+  if (frame) frame.src = 'about:blank';
+};
 let quickAlertContacts = [];
 let quickAlertMode = 'list';
 const alertEsc = value => String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
