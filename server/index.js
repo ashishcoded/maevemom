@@ -6,12 +6,36 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const multer     = require('multer');
+const { createClient } = require('@supabase/supabase-js');
 const path       = require('path');
 const fs         = require('fs');
 const { spawn }  = require('child_process');
 
 const app    = express();
 const server = http.createServer(app);
+const SUPABASE_URL = String(process.env.SUPABASE_URL || '').trim();
+const SUPABASE_PUBLISHABLE_KEY = String(process.env.SUPABASE_PUBLISHABLE_KEY || '').trim();
+const SUPABASE_SECRET_KEY = String(process.env.SUPABASE_SECRET_KEY || '').trim();
+const APP_URL = String(process.env.APP_URL || '').trim();
+const USE_SUPABASE_PROFILE_REPOSITORY = /^(1|true|yes|on)$/i.test(String(process.env.USE_SUPABASE_PROFILE_REPOSITORY || '').trim());
+const USE_SUPABASE_MEMORY_REPOSITORY = /^(1|true|yes|on)$/i.test(String(process.env.USE_SUPABASE_MEMORY_REPOSITORY || '').trim());
+// Server-only client. The secret key is intentionally never sent to the browser.
+const supabaseAdmin = SUPABASE_URL && SUPABASE_SECRET_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+    })
+  : null;
+const supabaseAuth = SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+    })
+  : null;
+function supabaseRecoveryClient() {
+  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+}
 const io     = new Server(server, {
   cors: { origin: '*', methods: ['GET','POST'] },
   pingTimeout: 25000,
@@ -87,6 +111,10 @@ const deviceSessions = new Map();
 const memories = new Map(); // userId → persistent jar memories
 const profilePinFailures = new Map();
 
+const supabaseProfileRepositoryEnabled = () => USE_SUPABASE_PROFILE_REPOSITORY && !!supabaseAdmin;
+const supabaseMemoryRepositoryEnabled = () => USE_SUPABASE_MEMORY_REPOSITORY && !!supabaseAdmin && supabaseProfileRepositoryEnabled();
+const MEMORY_STORAGE_BUCKET = 'memory-assets';
+
 const BUILT_IN_ACCOUNTS = [
   {id:'user_ashish',username:'ashish',displayName:'Ashish',avatarColor:'#e50914',password:'ashish123'},
   {id:'user_disha',username:'disha',displayName:'Disha',avatarColor:'#ff6b9d',password:'disha123'},
@@ -138,12 +166,138 @@ function getMemories(userId) {
 }
 const memoryDataUrl = (value, kind) => {
   const raw = String(value || '');
-  const re = kind === 'image' ? /^data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/i : /^data:audio\/(webm|ogg|mp4|mpeg|wav|x-wav);base64,[A-Za-z0-9+/=]+$/i;
   if (!raw) return null;
-  if (!re.test(raw)) throw new Error(`Invalid ${kind} attachment`);
-  if (Buffer.from(raw.split(',')[1], 'base64').length > (kind === 'image' ? 6 : 12) * 1024 * 1024) throw new Error(`${kind} attachment is too large`);
+  const re = kind === 'image' ? /^data:image\/(jpeg|jpg|png|webp|gif);base64,([A-Za-z0-9+/]+={0,2})$/i : /^data:(audio\/(?:webm|ogg|mp4|mpeg|wav|x-wav))(?:;codecs=[a-z0-9._-]+)?;base64,([A-Za-z0-9+/]+={0,2})$/i;
+  const match = re.exec(raw);
+  if (!match) throw new Error(`Invalid ${kind} attachment`);
+  const buffer = Buffer.from(match[2], 'base64');
+  if (kind === 'audio' && !validAudioSignature(match[1], buffer)) throw new Error('Invalid audio attachment');
+  if (buffer.length > (kind === 'image' ? 6 : 12) * 1024 * 1024) throw new Error(`${kind} attachment is too large`);
   return raw;
 };
+function validAudioSignature(mimeType, buffer) {
+  const mime = mimeType.toLowerCase();
+  if (mime === 'audio/webm') return buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+  if (mime === 'audio/ogg') return buffer.length >= 4 && buffer.subarray(0, 4).toString('ascii') === 'OggS';
+  if (mime === 'audio/mp4') return buffer.length >= 8 && buffer.subarray(4, 8).toString('ascii') === 'ftyp';
+  if (mime === 'audio/wav' || mime === 'audio/x-wav') return buffer.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WAVE';
+  if (mime === 'audio/mpeg') return buffer.length >= 3 && (buffer.subarray(0, 3).toString('ascii') === 'ID3' || (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0));
+  return false;
+}
+const isUuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+function memoryAssetFromDataUrl(value, kind) {
+  const raw=memoryDataUrl(value,kind);
+  if (!raw) return null;
+  const match=/^data:([^;]+)(?:;codecs=[^;]+)?;base64,(.*)$/i.exec(raw);
+  if (!match) throw new Error(`Invalid ${kind} attachment`);
+  const buffer=Buffer.from(match[2],'base64');
+  return {buffer,mimeType:match[1].toLowerCase()};
+}
+function markMemoryRepositoryError(error) {
+  if (error) error.isSupabaseMemoryRepositoryError=true;
+  return error;
+}
+function memoryRepositoryUnavailable(res) {
+  if (USE_SUPABASE_MEMORY_REPOSITORY && !supabaseProfileRepositoryEnabled()) return res.status(503).json({error:'Memory repository requires the Supabase profile repository'});
+  return null;
+}
+async function getSupabaseMemoryAssets(userId, memoryIds) {
+  if (!memoryIds.length) return [];
+  const result=await supabaseAdmin.from('memory_assets').select('id,memory_id,user_id,kind,storage_bucket,storage_path,mime_type,byte_size,created_at').eq('user_id',userId).in('memory_id',memoryIds);
+  if (result.error) throw markMemoryRepositoryError(result.error);
+  return result.data || [];
+}
+async function signedMemoryAsset(asset) {
+  const result=await supabaseAdmin.storage.from(asset.storage_bucket || MEMORY_STORAGE_BUCKET).createSignedUrl(asset.storage_path,3600);
+  if (result.error) throw markMemoryRepositoryError(result.error);
+  return result.data?.signedUrl || null;
+}
+async function loadSupabaseMemories(userId) {
+  if (!isUuid(userId)) { const error=new Error('Authenticated Supabase user ID is required'); error.code='AUTH_REQUIRED'; throw error; }
+  const memoriesResult=await supabaseAdmin.from('memories').select('id,user_id,text,color,made_at,created_at').eq('user_id',userId).order('made_at',{ascending:true});
+  if (memoriesResult.error) throw markMemoryRepositoryError(memoriesResult.error);
+  const rows=memoriesResult.data || [], assets=await getSupabaseMemoryAssets(userId,rows.map(row=>row.id));
+  const assetMap=new Map();
+  for (const asset of assets) {
+    const signedUrl=await signedMemoryAsset(asset);
+    assetMap.set(`${asset.memory_id}:${asset.kind}`,signedUrl);
+  }
+  return rows.map(row=>({
+    id:row.id, t:Date.parse(row.made_at) || Date.now(), made:Date.parse(row.created_at) || Date.now(),
+    text:row.text || '', color:row.color || '#f5a58c',
+    img:assetMap.get(`${row.id}:image`) || null, audio:assetMap.get(`${row.id}:audio`) || null,
+  }));
+}
+async function uploadMemoryAsset(userId,memoryId,kind,asset) {
+  const storagePath=`${userId}/${memoryId}/${kind}-${uuidv4()}`;
+  const result=await supabaseAdmin.storage.from(MEMORY_STORAGE_BUCKET).upload(storagePath,asset.buffer,{contentType:asset.mimeType,upsert:true});
+  if (result.error) throw markMemoryRepositoryError(result.error);
+  return {storagePath,mimeType:asset.mimeType,byteSize:asset.buffer.length};
+}
+async function removeMemoryStorageAssets(assets) {
+  for (const asset of assets) {
+    const result=await supabaseAdmin.storage.from(asset.storage_bucket || MEMORY_STORAGE_BUCKET).remove([asset.storage_path]);
+    if (result.error) throw markMemoryRepositoryError(result.error);
+  }
+}
+async function saveSupabaseMemory(userId,body) {
+  if (!isUuid(userId)) { const error=new Error('Authenticated Supabase user ID is required'); error.code='AUTH_REQUIRED'; throw error; }
+  const text=String(body.text||'').trim().slice(0,3000);
+  const color=/^#[0-9a-f]{6}$/i.test(String(body.color||''))?String(body.color):'#f5a58c';
+  const id=isUuid(body.id)?String(body.id):uuidv4();
+  const t=Number(body.t)||Date.now(), made=Number(body.made)||Date.now();
+  const image=memoryAssetFromDataUrl(body.img,'image'), audio=memoryAssetFromDataUrl(body.audio,'audio');
+  if(!text&&!image&&!audio){const error=new Error('Add text, a photo, or a voice note first'); error.code='INVALID_MEMORY'; throw error;}
+  const existingResult=await supabaseAdmin.from('memories').select('id,created_at').eq('id',id).eq('user_id',userId).maybeSingle();
+  if (existingResult.error) throw markMemoryRepositoryError(existingResult.error);
+  if (!existingResult.data) {
+    const countResult=await supabaseAdmin.from('memories').select('id').eq('user_id',userId);
+    if (countResult.error) throw markMemoryRepositoryError(countResult.error);
+    if ((countResult.data || []).length>=300){const error=new Error('Memory Lane is full. Remove an old memory first.'); error.code='MEMORY_LIMIT'; throw error;}
+  }
+  const oldAssets=(!existingResult.data && !image && !audio) ? [] : await getSupabaseMemoryAssets(userId,[id]);
+  const uploaded=[];
+  let metadataCommitted=false;
+  try {
+    const newAssets={};
+    if (image) { newAssets.image=await uploadMemoryAsset(userId,id,'image',image); uploaded.push({storage_bucket:MEMORY_STORAGE_BUCKET,storage_path:newAssets.image.storagePath}); }
+    if (audio) { newAssets.audio=await uploadMemoryAsset(userId,id,'audio',audio); uploaded.push({storage_bucket:MEMORY_STORAGE_BUCKET,storage_path:newAssets.audio.storagePath}); }
+    const memoryPayload={id,user_id:userId,text,color,made_at:new Date(t).toISOString()};
+    if (!existingResult.data) memoryPayload.created_at=new Date(made).toISOString();
+    const memoryResult=await supabaseAdmin.from('memories').upsert(memoryPayload,{onConflict:'id,user_id'});
+    if (memoryResult.error) throw markMemoryRepositoryError(memoryResult.error);
+    for (const [kind,asset] of Object.entries(newAssets)) {
+      const assetResult=await supabaseAdmin.from('memory_assets').upsert({memory_id:id,user_id:userId,kind,storage_bucket:MEMORY_STORAGE_BUCKET,storage_path:asset.storagePath,mime_type:asset.mimeType,byte_size:asset.byteSize},{onConflict:'memory_id,kind'});
+      if (assetResult.error) throw markMemoryRepositoryError(assetResult.error);
+    }
+    metadataCommitted=true;
+    for (const [kind,asset] of Object.entries(newAssets)) {
+      const old=oldAssets.filter(item=>item.kind===kind && item.storage_path!==asset.storagePath);
+      if (old.length) { try { await removeMemoryStorageAssets(old); } catch {} }
+    }
+    for (const kind of ['image','audio']) if (!body[kind === 'image' ? 'img' : 'audio']) {
+      const old=oldAssets.filter(asset=>asset.kind===kind);
+      if (old.length) { await removeMemoryStorageAssets(old); const deleteResult=await supabaseAdmin.from('memory_assets').delete().eq('memory_id',id).eq('user_id',userId).eq('kind',kind); if (deleteResult.error) throw markMemoryRepositoryError(deleteResult.error); }
+    }
+    return {_created:!existingResult.data,id,t,made:existingResult.data?.created_at?Date.parse(existingResult.data.created_at)||made:made,text,color,img:image?true:(body.img===null?null:undefined),audio:audio?true:(body.audio===null?null:undefined)};
+  } catch(error) {
+    try { if (!metadataCommitted && uploaded.length) await removeMemoryStorageAssets(uploaded); } catch {}
+    throw error;
+  }
+}
+async function deleteSupabaseMemory(userId,memoryId) {
+  if (!isUuid(userId)) { const error=new Error('Authenticated Supabase user ID is required'); error.code='AUTH_REQUIRED'; throw error; }
+  const memoryResult=await supabaseAdmin.from('memories').select('id').eq('id',memoryId).eq('user_id',userId).maybeSingle();
+  if (memoryResult.error) throw markMemoryRepositoryError(memoryResult.error);
+  if (!memoryResult.data) return false;
+  const assets=await getSupabaseMemoryAssets(userId,[memoryId]);
+  await removeMemoryStorageAssets(assets);
+  const assetsDelete=await supabaseAdmin.from('memory_assets').delete().eq('memory_id',memoryId).eq('user_id',userId);
+  if (assetsDelete.error) throw markMemoryRepositoryError(assetsDelete.error);
+  const result=await supabaseAdmin.from('memories').delete().eq('id',memoryId).eq('user_id',userId);
+  if (result.error) throw markMemoryRepositoryError(result.error);
+  return true;
+}
 function saveProfiles() { fs.writeFileSync(profileFile,JSON.stringify(Object.fromEntries(userProfiles),null,2),'utf8'); }
 function saveDeviceSessions() { fs.writeFileSync(deviceSessionsFile,JSON.stringify(Object.fromEntries(deviceSessions),null,2),'utf8'); }
 function disconnectDeviceSession(sessionId) {
@@ -161,6 +315,108 @@ function ensureUserProfiles(userId) {
     userProfiles.set(userId,list); saveProfiles();
   }
   return userProfiles.get(userId);
+}
+function runtimeUserFromSupabase(row) {
+  return {
+    id:row.id, supabaseAuthId:row.id, username:row.username || 'user', displayName:row.display_name,
+    avatar:row.avatar || String(row.display_name || 'M')[0].toUpperCase(), avatarColor:row.avatar_color || '#e50914',
+    avatarUrl:row.avatar_path || null, bio:row.bio || 'Movie lover', email:row.email || null,
+    passwordHash:null, createdAt:Date.parse(row.created_at) || Date.now(),
+  };
+}
+function runtimeProfileFromSupabase(row, pinHash = null) {
+  return {
+    id:row.id, name:row.name, avatarKey:row.avatar_key || 'classic-01', avatarEmoji:row.avatar_emoji || '',
+    avatarColor:row.avatar_color || '#e50914', avatarUrl:row.avatar_path || null, pinHash,
+    createdAt:Date.parse(row.created_at) || Date.now(),
+  };
+}
+async function loadSupabaseProfilePins(profileRows) {
+  const ids=(profileRows || []).map(row=>row.id).filter(id=>/^[0-9a-f-]{36}$/i.test(String(id || '')));
+  if (!ids.length) return new Map();
+  const {data,error}=await supabaseAdmin.rpc('get_profile_pin_hashes',{p_user_id:profileRows[0]?.user_id,p_profile_ids:ids});
+  if (error) { error.isSupabaseRepositoryError=true; throw error; }
+  return new Map((data || []).map(row=>[row.profile_id,row.pin_hash || null]));
+}
+async function persistSupabaseProfilePin(userId, profileId, pinHash) {
+  if (!supabaseProfileRepositoryEnabled()) return;
+  if (pinHash) {
+    const result=await supabaseAdmin.rpc('upsert_profile_pin_hash',{p_user_id:userId,p_profile_id:profileId,p_pin_hash:pinHash});
+    if (result.error) throw result.error;
+  } else {
+    const result=await supabaseAdmin.rpc('delete_profile_pin_hash',{p_user_id:userId,p_profile_id:profileId});
+    if (result.error) throw result.error;
+  }
+}
+async function hydrateSupabaseRuntimeUser(userId) {
+  if (!supabaseProfileRepositoryEnabled()) return users.get(userId) || null;
+  if (!/^[0-9a-f-]{36}$/i.test(String(userId || ''))) return null;
+  const {data:userRow,error:userError}=await supabaseAdmin.from('app_users').select('*').eq('id',userId).maybeSingle();
+  if (userError) { userError.isSupabaseRepositoryError=true; throw userError; }
+  if (!userRow) return null;
+  const {data:profileRows,error:profileError}=await supabaseAdmin.from('profiles').select('*').eq('user_id',userId).order('created_at',{ascending:true});
+  if (profileError) { profileError.isSupabaseRepositoryError=true; throw profileError; }
+  const pins=await loadSupabaseProfilePins(profileRows || []);
+  const user=runtimeUserFromSupabase(userRow), profiles=(profileRows || []).map(row=>runtimeProfileFromSupabase(row,pins.get(row.id) || null));
+  users.set(user.id,user); userProfiles.set(user.id,profiles);
+  return user;
+}
+async function ensureSupabaseProfileUser(authUser) {
+  if (!supabaseProfileRepositoryEnabled()) return null;
+  const authId=String(authUser.id || '');
+  if (!/^[0-9a-f-]{36}$/i.test(authId)) throw new Error('Supabase Auth user ID is invalid');
+  let {data:userRow,error}=await supabaseAdmin.from('app_users').select('*').eq('id',authId).maybeSingle();
+  if (error) throw error;
+  const email=String(authUser.email || '').trim().toLowerCase();
+  const displayName=String(authUser.user_metadata?.display_name || email.split('@')[0] || "Maeve'mom user").trim().slice(0,30);
+  if (!userRow) {
+    const base=uniqueSupabaseUsername(email);
+    let username=base, suffix=1;
+    while (true) {
+      const taken=await supabaseAdmin.from('app_users').select('id').eq('username',username).maybeSingle();
+      if (taken.error) throw taken.error;
+      if (!taken.data) break;
+      username=`${base}${suffix++}`.slice(0,20);
+    }
+    const result=await supabaseAdmin.from('app_users').insert({id:authId,username,display_name:displayName,avatar:displayName[0]?.toUpperCase()||'M',avatar_color:'#e50914',bio:'Movie lover',email}).select('*').single();
+    if (result.error) throw result.error;
+    userRow=result.data;
+  } else if (email && userRow.email !== email) {
+    const result=await supabaseAdmin.from('app_users').update({email}).eq('id',authId).select('*').single();
+    if (result.error) throw result.error;
+    userRow=result.data;
+  }
+  let {data:profileRows,error:profileError}=await supabaseAdmin.from('profiles').select('*').eq('user_id',authId).order('created_at',{ascending:true});
+  if (profileError) throw profileError;
+  if (!profileRows?.length) {
+    const result=await supabaseAdmin.from('profiles').insert({id:authId,user_id:authId,name:displayName,avatar_key:'classic-01',avatar_color:userRow.avatar_color || '#e50914'}).select('*').single();
+    if (result.error) throw result.error;
+    profileRows=[result.data];
+  }
+  const pins=await loadSupabaseProfilePins(profileRows);
+  const user=runtimeUserFromSupabase(userRow), profiles=profileRows.map(row=>runtimeProfileFromSupabase(row,pins.get(row.id) || null));
+  users.set(user.id,user); userProfiles.set(user.id,profiles);
+  return {user,profiles};
+}
+async function updateSupabaseProfileUser(user,profile,{pinProvided=false}={}) {
+  if (!supabaseProfileRepositoryEnabled()) return;
+  const userResult=await supabaseAdmin.from('app_users').update({username:user.username,display_name:user.displayName,avatar:user.avatar,avatar_color:user.avatarColor,bio:user.bio,email:user.email}).eq('id',user.id).select('*').single();
+  if (userResult.error) throw userResult.error;
+  const profileResult=await supabaseAdmin.from('profiles').update({name:profile.name,avatar_key:profile.avatarKey,avatar_emoji:profile.avatarEmoji,avatar_color:profile.avatarColor,avatar_path:profile.avatarUrl}).eq('id',profile.id).eq('user_id',user.id).select('*').single();
+  if (profileResult.error) throw profileResult.error;
+  if (pinProvided) await persistSupabaseProfilePin(user.id,profile.id,profile.pinHash);
+  users.set(user.id,runtimeUserFromSupabase(userResult.data));
+  const profiles=ensureUserProfiles(user.id).map(item=>item.id===profile.id?runtimeProfileFromSupabase(profileResult.data,profile.pinHash):item);
+  userProfiles.set(user.id,profiles);
+}
+async function createSupabaseProfile(userId,profile) {
+  if (!supabaseProfileRepositoryEnabled()) return profile;
+  const result=await supabaseAdmin.from('profiles').insert({id:profile.id,user_id:userId,name:profile.name,avatar_key:profile.avatarKey,avatar_emoji:profile.avatarEmoji,avatar_color:profile.avatarColor,avatar_path:profile.avatarUrl}).select('*').single();
+  if (result.error) throw result.error;
+  await persistSupabaseProfilePin(userId,profile.id,profile.pinHash);
+  const saved=runtimeProfileFromSupabase(result.data,profile.pinHash);
+  userProfiles.set(userId,[...ensureUserProfiles(userId),saved]);
+  return saved;
 }
 function publicProfile(profile) {
   const avatarKey=safeAvatarKey(profile.avatarKey);
@@ -180,6 +436,22 @@ function createSessionToken(userId,profileId,req,sessionId=null) {
   deviceSessions.set(id,{id,userId,profileId,createdAt:existing?.createdAt || Date.now(),lastActive:Date.now(),userAgent:String(req.headers['user-agent'] || 'Unknown device').slice(0,240)});
   saveDeviceSessions();
   return jwt.sign({userId,profileId,sid:id},JWT_SECRET);
+}
+function uniqueSupabaseUsername(email) {
+  const base=String(email||'user').split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g,'').slice(0,14) || 'user';
+  let username=base, n=1;
+  while ([...users.values()].some(user=>user.username.toLowerCase()===username.toLowerCase())) username=`${base}${n++}`.slice(0,20);
+  return username;
+}
+async function ensureSupabaseLocalUser(authUser) {
+  if (supabaseProfileRepositoryEnabled()) return (await ensureSupabaseProfileUser(authUser)).user;
+  let user=[...users.values()].find(item=>item.supabaseAuthId===authUser.id);
+  if (user) return user;
+  const email=String(authUser.email||'').trim().toLowerCase();
+  const displayName=String(authUser.user_metadata?.display_name || email.split('@')[0] || "Maeve'mom user").trim().slice(0,30);
+  user={id:`user_${authUser.id}`,supabaseAuthId:authUser.id,username:uniqueSupabaseUsername(email),displayName,avatar:displayName[0]?.toUpperCase()||'M',avatarColor:'#e50914',avatarUrl:null,bio:'Movie lover',email,passwordHash:null,createdAt:Date.parse(authUser.created_at)||Date.now()};
+  users.set(user.id,user); saveUsers(); ensureUserProfiles(user.id);
+  return user;
 }
 for (const [id,record] of Object.entries(readJsonMap(deviceSessionsFile))) if(record?.userId) deviceSessions.set(id,{...record,id});
 for (const [id,list] of Object.entries(readJsonMap(profileFile))) if(Array.isArray(list)) userProfiles.set(id,list);
@@ -499,11 +771,12 @@ function promoteOwner(room) {
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
-function authMw(req,res,next){
+async function authMw(req,res,next){
   const tok=req.headers.authorization?.split(' ')[1];
   if(!tok) return res.status(401).json({error:'No token'});
   try {
     req.user=jwt.verify(tok,JWT_SECRET);
+    if (supabaseProfileRepositoryEnabled() && !await hydrateSupabaseRuntimeUser(req.user.userId)) return res.status(401).json({error:'Account not found'});
     if(!req.user.sid) {
       const profileId=req.user.profileId || ensureUserProfiles(req.user.userId)[0]?.id;
       const sid=uuidv4(),replacement=createSessionToken(req.user.userId,profileId,req,sid);
@@ -525,10 +798,63 @@ function authMw(req,res,next){
     }
     next();
   }
-  catch { res.status(401).json({error:'Invalid token'}); }
+  catch(error) {
+    if (error?.isSupabaseRepositoryError) return res.status(503).json({error:'Account data is temporarily unavailable'});
+    res.status(401).json({error:'Invalid token'});
+  }
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
+app.post('/api/auth/signup', async (req,res) => {
+  if(!supabaseAuth) return res.status(503).json({error:'Supabase Auth is not configured'});
+  const email=String(req.body.email||'').trim().toLowerCase(), password=String(req.body.password||''), displayName=String(req.body.displayName||'').trim().replace(/\s+/g,' ').slice(0,30);
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({error:'Enter a valid email address'});
+  if(password.length<8) return res.status(400).json({error:'Password must be at least 8 characters'});
+  try {
+    const options={data:{display_name:displayName||email.split('@')[0]}};
+    if(APP_URL) options.emailRedirectTo=APP_URL;
+    const {data,error}=await supabaseAuth.auth.signUp({email,password,options});
+    if(error) return res.status(400).json({error:error.message});
+    res.status(201).json({ok:true,emailConfirmationRequired:!data.session,message:'Check your email to confirm your account.'});
+  } catch(error){res.status(502).json({error:'Unable to reach Supabase Auth'});}
+});
+app.post('/api/auth/forgot-password', async (req,res) => {
+  if(!supabaseAuth || !APP_URL) return res.status(503).json({error:'Supabase password recovery is not configured'});
+  const email=String(req.body.email||'').trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({error:'Enter a valid email address'});
+  try {
+    const {error}=await supabaseAuth.auth.resetPasswordForEmail(email,{redirectTo:APP_URL});
+    if(error) return res.status(400).json({error:error.message});
+    res.json({ok:true,message:'If an account exists, a password reset email has been sent.'});
+  } catch(error){res.status(502).json({error:'Unable to reach Supabase Auth'});}
+});
+app.post('/api/auth/reset-password', async (req,res) => {
+  if(!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) return res.status(503).json({error:'Supabase password recovery is not configured'});
+  const accessToken=String(req.body.accessToken||''), refreshToken=String(req.body.refreshToken||''), password=String(req.body.password||'');
+  if(!accessToken || !refreshToken) return res.status(400).json({error:'Recovery session is missing or expired'});
+  if(password.length<8) return res.status(400).json({error:'Password must be at least 8 characters'});
+  try {
+    const client=supabaseRecoveryClient();
+    const {error:sessionError}=await client.auth.setSession({access_token:accessToken,refresh_token:refreshToken});
+    if(sessionError) return res.status(401).json({error:'Recovery session is invalid or expired'});
+    const {error}=await client.auth.updateUser({password});
+    if(error) return res.status(400).json({error:error.message});
+    res.json({ok:true,message:'Password updated. You can now log in.'});
+  } catch(error){res.status(502).json({error:'Unable to reach Supabase Auth'});}
+});
+app.post('/api/auth/email-login', async (req,res) => {
+  if(!supabaseAuth) return res.status(503).json({error:'Supabase Auth is not configured'});
+  const email=String(req.body.email||'').trim().toLowerCase(), password=String(req.body.password||'');
+  if(!email||!password) return res.status(400).json({error:'Email and password required'});
+  try {
+    const {data,error}=await supabaseAuth.auth.signInWithPassword({email,password});
+    if(error) return res.status(401).json({error:error.message});
+    const authUser=data.user;
+    if(!authUser?.email_confirmed_at && !authUser?.confirmed_at) return res.status(403).json({error:'Confirm your email before logging in.'});
+    const user=await ensureSupabaseLocalUser(authUser), profile=ensureUserProfiles(user.id)[0], token=createSessionToken(user.id,profile.id,req);
+    res.json({token,user:profileUser(user.id,profile.id)});
+  } catch(error){res.status(502).json({error:'Unable to reach Supabase Auth'});}
+});
 app.post('/api/auth/login', async (req,res) => {
   try {
     const {username,password}=req.body;
@@ -559,15 +885,24 @@ app.post('/api/auth/logout',authMw,(req,res)=>{
 
 app.get('/api/profiles',authMw,(req,res)=>res.json({profiles:ensureUserProfiles(req.user.userId).map(publicProfile),activeProfileId:req.user.profileId || null}));
 app.post('/api/profiles',authMw,async(req,res)=>{
-  const name=String(req.body.name||'').trim().replace(/\s+/g,' ').slice(0,24);
-  const avatarKey=safeAvatarKey(req.body.avatarKey);
-  const pin=String(req.body.pin||'');
-  if(!name) return res.status(400).json({error:'Enter a profile name'});
-  if(pin && !/^\d{4}$/.test(pin)) return res.status(400).json({error:'Profile PIN must be exactly 4 digits'});
-  const profiles=ensureUserProfiles(req.user.userId);
-  if(profiles.length>=10) return res.status(400).json({error:'You can create up to 10 profiles'});
-  const profile={id:'profile_'+uuidv4().replace(/-/g,'').slice(0,12),name,avatarKey,avatarColor:safeProfileColor(req.body.avatarColor),avatarEmoji:String(req.body.avatarEmoji||'').slice(0,8),pinHash:pin ? await bcrypt.hash(pin,10) : null,createdAt:Date.now()};
-  profiles.push(profile); saveProfiles(); res.json({profile:publicProfile(profile)});
+  try {
+    const name=String(req.body.name||'').trim().replace(/\s+/g,' ').slice(0,24);
+    const avatarKey=safeAvatarKey(req.body.avatarKey);
+    const pin=String(req.body.pin||'');
+    if(!name) return res.status(400).json({error:'Enter a profile name'});
+    if(pin && !/^\d{4}$/.test(pin)) return res.status(400).json({error:'Profile PIN must be exactly 4 digits'});
+    const profiles=ensureUserProfiles(req.user.userId);
+    if(profiles.length>=10) return res.status(400).json({error:'You can create up to 10 profiles'});
+    const profile={id:supabaseProfileRepositoryEnabled()?uuidv4():'profile_'+uuidv4().replace(/-/g,'').slice(0,12),name,avatarKey,avatarColor:safeProfileColor(req.body.avatarColor),avatarEmoji:String(req.body.avatarEmoji||'').slice(0,8),pinHash:pin ? await bcrypt.hash(pin,10) : null,createdAt:Date.now()};
+    if (supabaseProfileRepositoryEnabled()) {
+      const saved=await createSupabaseProfile(req.user.userId,profile);
+      return res.json({profile:publicProfile(saved)});
+    }
+    profiles.push(profile); saveProfiles(); res.json({profile:publicProfile(profile)});
+  } catch(error) {
+    if (error?.code === '23505') return res.status(409).json({error:'That profile already exists'});
+    res.status(500).json({error:'Could not create profile'});
+  }
 });
 app.post('/api/profiles/:id/activate',authMw,async(req,res)=>{
   const profile=ensureUserProfiles(req.user.userId).find(item=>item.id===req.params.id);
@@ -586,23 +921,41 @@ app.post('/api/profiles/:id/activate',authMw,async(req,res)=>{
 app.patch('/api/profiles/:id',authMw,async(req,res)=>{
   const profile=ensureUserProfiles(req.user.userId).find(item=>item.id===req.params.id);
   if(!profile) return res.status(404).json({error:'Profile not found'});
-  if(req.body.name!==undefined){const name=String(req.body.name).trim().replace(/\s+/g,' ').slice(0,24);if(!name)return res.status(400).json({error:'Enter a profile name'});profile.name=name;}
-  if(req.body.avatarKey!==undefined){const nextAvatarKey=safeAvatarKey(req.body.avatarKey);if(nextAvatarKey!==profile.avatarKey)profile.avatarUrl=null;profile.avatarKey=nextAvatarKey;}
-  if(req.body.avatarColor!==undefined && /^#[0-9a-f]{6}$/i.test(String(req.body.avatarColor))) profile.avatarColor=String(req.body.avatarColor);
-  if(req.body.avatarEmoji!==undefined) profile.avatarEmoji=String(req.body.avatarEmoji).slice(0,8);
-  if(req.body.pin!==undefined){const pin=String(req.body.pin);if(pin && !/^\d{4}$/.test(pin))return res.status(400).json({error:'Profile PIN must be exactly 4 digits'});profile.pinHash=pin?await bcrypt.hash(pin,10):null;}
-  saveProfiles(); res.json({profile:publicProfile(profile)});
+  const before={...profile};
+  try {
+    if(req.body.name!==undefined){const name=String(req.body.name).trim().replace(/\s+/g,' ').slice(0,24);if(!name)return res.status(400).json({error:'Enter a profile name'});profile.name=name;}
+    if(req.body.avatarKey!==undefined){const nextAvatarKey=safeAvatarKey(req.body.avatarKey);if(nextAvatarKey!==profile.avatarKey)profile.avatarUrl=null;profile.avatarKey=nextAvatarKey;}
+    if(req.body.avatarColor!==undefined && /^#[0-9a-f]{6}$/i.test(String(req.body.avatarColor))) profile.avatarColor=String(req.body.avatarColor);
+    if(req.body.avatarEmoji!==undefined) profile.avatarEmoji=String(req.body.avatarEmoji).slice(0,8);
+    const pinProvided=req.body.pin!==undefined;
+    if(pinProvided){const pin=String(req.body.pin);if(pin && !/^\d{4}$/.test(pin))return res.status(400).json({error:'Profile PIN must be exactly 4 digits'});profile.pinHash=pin?await bcrypt.hash(pin,10):null;}
+    if (supabaseProfileRepositoryEnabled()) await updateSupabaseProfileUser(users.get(req.user.userId),profile,{pinProvided});
+    else saveProfiles();
+    res.json({profile:publicProfile(profile)});
+  } catch(error) {
+    Object.assign(profile,before);
+    if (error?.code === '23505') return res.status(409).json({error:'That profile already exists'});
+    res.status(500).json({error:'Could not update profile'});
+  }
 });
-app.delete('/api/profiles/:id',authMw,(req,res)=>{
-  const profiles=ensureUserProfiles(req.user.userId);
-  if(profiles.length<=1) return res.status(400).json({error:'Keep at least one profile on this account'});
-  const index=profiles.findIndex(item=>item.id===req.params.id);
-  if(index<0)return res.status(404).json({error:'Profile not found'});
-  profiles.splice(index,1);saveProfiles();
-  const active=profiles.find(item=>item.id===req.user.profileId)||profiles[0];
-  const sessionId=req.user.profileId===req.params.id && req.user.sid ? req.user.sid : null;
-  const token=sessionId?createSessionToken(req.user.userId,active.id,req,sessionId):null;
-  res.json({profiles:profiles.map(publicProfile),activeProfileId:active.id,token,user:profileUser(req.user.userId,active.id)});
+app.delete('/api/profiles/:id',authMw,async(req,res)=>{
+  try {
+    const profiles=ensureUserProfiles(req.user.userId);
+    if(profiles.length<=1) return res.status(400).json({error:'Keep at least one profile on this account'});
+    const index=profiles.findIndex(item=>item.id===req.params.id);
+    if(index<0)return res.status(404).json({error:'Profile not found'});
+    if (supabaseProfileRepositoryEnabled()) {
+      const result=await supabaseAdmin.from('profiles').delete().eq('id',req.params.id).eq('user_id',req.user.userId);
+      if (result.error) return res.status(500).json({error:'Could not delete profile'});
+    }
+    profiles.splice(index,1); if (!supabaseProfileRepositoryEnabled()) saveProfiles();
+    const active=profiles.find(item=>item.id===req.user.profileId)||profiles[0];
+    const sessionId=req.user.profileId===req.params.id && req.user.sid ? req.user.sid : null;
+    const token=sessionId?createSessionToken(req.user.userId,active.id,req,sessionId):null;
+    res.json({profiles:profiles.map(publicProfile),activeProfileId:active.id,token,user:profileUser(req.user.userId,active.id)});
+  } catch(error) {
+    res.status(500).json({error:'Could not delete profile'});
+  }
 });
 app.post('/api/account/password',authMw,async(req,res)=>{
   const user=users.get(req.user.userId),current=String(req.body.currentPassword||''),next=String(req.body.newPassword||'');
@@ -622,11 +975,25 @@ app.delete('/api/account/sessions/:id',authMw,(req,res)=>{
 });
 
 // ── Memory Lane / jar-of-stars ──────────────────────────────────────────────
-app.get('/api/memories', authMw, (req,res) => {
-  res.json({items:getMemories(req.user.userId).slice().sort((a,b)=>(a.made||0)-(b.made||0))});
-});
-app.post('/api/memories', authMw, (req,res) => {
+app.get('/api/memories', authMw, async (req,res) => {
+  const unavailable=memoryRepositoryUnavailable(res); if (unavailable) return unavailable;
   try {
+    const items=supabaseMemoryRepositoryEnabled()?await loadSupabaseMemories(req.user.userId):getMemories(req.user.userId).slice().sort((a,b)=>(a.made||0)-(b.made||0));
+    res.json({items});
+  } catch(error) {
+    if (error?.isSupabaseMemoryRepositoryError) return res.status(503).json({error:'Memory storage is temporarily unavailable'});
+    if (error?.code==='AUTH_REQUIRED') return res.status(401).json({error:'Supabase account is required'});
+    res.status(500).json({error:'Could not load memories'});
+  }
+});
+app.post('/api/memories', authMw, async (req,res) => {
+  const unavailable=memoryRepositoryUnavailable(res); if (unavailable) return unavailable;
+  try {
+    if (supabaseMemoryRepositoryEnabled()) {
+      const item=await saveSupabaseMemory(req.user.userId,req.body||{});
+      const status=item._created?201:200; delete item._created;
+      return res.status(status).json({item});
+    }
     const body=req.body||{}, text=String(body.text||'').trim().slice(0,3000);
     const color=/^#[0-9a-f]{6}$/i.test(String(body.color||''))?String(body.color):'#f5a58c';
     const id=String(body.id||uuidv4()).slice(0,80);
@@ -638,9 +1005,26 @@ app.post('/api/memories', authMw, (req,res) => {
     const item={id,t,made,text,color,img:image,audio};
     if(existing<0)list.push(item);else list[existing]=item;
     saveMemories();res.status(existing<0?201:200).json({item});
-  } catch(error) { res.status(400).json({error:error.message||'Could not save memory'}); }
+  } catch(error) {
+    if (error?.isSupabaseMemoryRepositoryError) return res.status(503).json({error:'Memory storage is temporarily unavailable'});
+    if (error?.code==='AUTH_REQUIRED') return res.status(401).json({error:'Supabase account is required'});
+    if (error?.code==='MEMORY_LIMIT' || error?.code==='INVALID_MEMORY') return res.status(400).json({error:error.message});
+    res.status(400).json({error:error.message||'Could not save memory'});
+  }
 });
-app.delete('/api/memories/:id', authMw, (req,res) => {
+app.delete('/api/memories/:id', authMw, async (req,res) => {
+  const unavailable=memoryRepositoryUnavailable(res); if (unavailable) return unavailable;
+  if (supabaseMemoryRepositoryEnabled()) {
+    try {
+      const deleted=await deleteSupabaseMemory(req.user.userId,req.params.id);
+      if (!deleted) return res.status(404).json({error:'Memory not found'});
+      return res.json({ok:true});
+    } catch(error) {
+      if (error?.isSupabaseMemoryRepositoryError) return res.status(503).json({error:'Memory storage is temporarily unavailable'});
+      if (error?.code==='AUTH_REQUIRED') return res.status(401).json({error:'Supabase account is required'});
+      return res.status(500).json({error:'Could not delete memory'});
+    }
+  }
   const list=getMemories(req.user.userId), index=list.findIndex(item=>item.id===req.params.id);
   if(index<0)return res.status(404).json({error:'Memory not found'});
   list.splice(index,1);saveMemories();res.json({ok:true});
@@ -727,8 +1111,8 @@ app.patch('/api/auth/profile', authMw, uploadAvatar.single('avatar'), async (req
     if(req.body.avatarColor && /^#[0-9a-f]{6}$/i.test(req.body.avatarColor)){activeProfile.avatarColor=req.body.avatarColor;if(activeProfile.id===profiles[0].id)u.avatarColor=req.body.avatarColor;}
     if(req.file){activeProfile.avatarUrl='/uploads/'+req.file.filename;if(activeProfile.id===profiles[0].id)u.avatarUrl=activeProfile.avatarUrl;}
     if(req.body.password?.length>=6) u.passwordHash=await bcrypt.hash(req.body.password,10);
-    saveUsers();
-    saveProfiles();
+    if (supabaseProfileRepositoryEnabled()) await updateSupabaseProfileUser(u,activeProfile);
+    else { saveUsers(); saveProfiles(); }
     res.json({user:profileUser(u.id,activeProfile.id)});
   } catch(e){res.status(500).json({error:e.message});}
 });

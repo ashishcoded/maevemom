@@ -87,6 +87,7 @@ const S = {
   // WebRTC
   rtc: null,
 };
+let recoverySession = null;
 
 function makeRtcState() {
   return {
@@ -419,11 +420,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.twemoji) buildEmoji();
   else window.addEventListener('load', buildEmoji);
 
+  // Recovery links return Supabase tokens in the URL fragment. Keep them only in memory.
+  const recoveryParams = new URLSearchParams(location.hash.replace(/^#/,''));
+  if (recoveryParams.get('type') === 'recovery' && recoveryParams.get('access_token') && recoveryParams.get('refresh_token')) {
+    recoverySession = { accessToken: recoveryParams.get('access_token'), refreshToken: recoveryParams.get('refresh_token') };
+    history.replaceState(null, document.title, `${location.pathname}${location.search}`);
+    clearSession();
+    goAuth();
+    switchAuthTab('reset');
+  }
+
   // URL params
   const p = new URLSearchParams(location.search);
   const invRoom = p.get('room'), invPw = p.get('pw');
 
-  if (S.token && S.user) {
+  if (recoverySession) {
+    // Stay on the reset form until the in-memory recovery session is consumed.
+  } else if (S.token && S.user) {
     try {
       const { user } = await api('GET', '/auth/me');
       persist(user, S.token);
@@ -1237,20 +1250,51 @@ function renderUserLibraryList(id, items, editable) {
 
 // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.doLogin = async () => {
-  const u=$('l-user').value.trim(), p=$('l-pass').value, e=$('l-err'); e.textContent='';
+  const u=$('l-user').value.trim(), p=$('l-pass').value, e=$('l-err'); e.textContent=''; e.style.color='';
   if(!u||!p){e.textContent='Fill in all fields';return;}
   try {
-    const{token,user}=await api('POST','/auth/login',{username:u,password:p});
+    const{token,user}=await api('POST','/auth/email-login',{email:u,password:p});
     persist(user,token); goHome();
     if(window._inv){const i=window._inv;window._inv=null;setTimeout(()=>{$('j-id').value=i.room;if(i.pw)$('j-pw').value=i.pw;openJoinModal();},200);}
+  } catch(ex){e.textContent=ex.message;}
+};
+window.doSignup = async () => {
+  const name=$('s-name').value.trim(), email=$('s-email').value.trim(), password=$('s-pass').value, e=$('s-err');
+  e.textContent=''; e.style.color='';
+  if(!email||!password){e.textContent='Fill in all fields';return;}
+  try {
+    await api('POST','/auth/signup',{displayName:name,email,password});
+    $('l-user').value=email; $('l-pass').value=''; switchAuthTab('login');
+    $('l-err').style.color='#8ee6ad'; $('l-err').textContent='Check your email to confirm your account, then log in.';
+  } catch(ex){e.textContent=ex.message;}
+};
+window.sendResetEmail = async () => {
+  const email=$('r-email').value.trim(), e=$('r-err'); e.textContent=''; e.style.color='';
+  if(!email){e.textContent='Enter your email address';return;}
+  try {
+    const result=await api('POST','/auth/forgot-password',{email});
+    e.style.color='#8ee6ad'; e.textContent=result.message||'If an account exists, a reset email has been sent.';
+  } catch(ex){e.textContent=ex.message;}
+};
+window.resetPassword = async () => {
+  const password=$('r-pass').value, e=$('reset-err'); e.textContent=''; e.style.color='';
+  if(!recoverySession){e.textContent='This reset link is invalid or expired';return;}
+  if(password.length<8){e.textContent='Password must be at least 8 characters';return;}
+  try {
+    const result=await api('POST','/auth/reset-password',{accessToken:recoverySession.accessToken,refreshToken:recoverySession.refreshToken,password});
+    recoverySession=null; $('r-pass').value=''; switchAuthTab('login');
+    $('l-err').style.color='#8ee6ad'; $('l-err').textContent=result.message||'Password updated. You can now log in.';
   } catch(ex){e.textContent=ex.message;}
 };
 window.signOut = () => { if(S.token)api('POST','/auth/logout',{}).catch(()=>{});closeProfileSwitcher();endCall(); stopAllTimers(); clearRoomSession(); if(S.socket){S.socket.disconnect();S.socket=null;} S.room=null; S.library={items:[],usage:null}; $$('.overlay').forEach(o=>o.classList.add('hidden')); clearSession(); switchAuthTab('login'); goAuth(); };
 
 // ── Auth screen: tab switch, password reveal, poster wall, device QR ──
-window.switchAuthTab = () => {
-  $('auth-title').textContent = 'Welcome back to Maeve\u2019mom';
-  $('auth-sub').textContent = 'Sign in with your username and password';
+window.switchAuthTab = mode => {
+  const signup=mode==='signup', forgot=mode==='forgot', reset=mode==='reset';
+  $$('.aform').forEach(form=>form.classList.add('hidden'));
+  $(`f-${mode}`)?.classList.remove('hidden');
+  $('auth-title').textContent = signup ? 'Create your Maeve\u2019mom account' : forgot ? 'Reset your password' : reset ? 'Set a new password' : 'Welcome back to Maeve\u2019mom';
+  $('auth-sub').textContent = signup ? 'Sign up with your email address' : forgot ? 'We will email you a secure reset link' : reset ? 'Choose a new password for your account' : 'Sign in with your verified email and password';
 };
 window.toggleAuthPw = (id, btn) => { const input = $(id); input.type = input.type === 'password' ? 'text' : 'password'; btn.classList.toggle('is-on'); };
 

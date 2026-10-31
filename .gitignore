@@ -1,5 +1,13 @@
 node_modules/
+.env
+.env.*
+!.env.example
 public/uploads/
+.backups/
 *.mkv
 *.mp4
 *.mov
+tests/.tmp-real-memory-data/
+tests/.tmp-real-profile-data/
+tests/.tmp-real-profile-uploads/
+tests/.tmp-real-memory-uploads/

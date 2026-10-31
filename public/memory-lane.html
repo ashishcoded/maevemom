@@ -243,7 +243,14 @@ const authToken = () => localStorage.getItem('mm_tok') || '';
 async function memoryApi(method, path, body) {
   const headers = {'Content-Type':'application/json'};
   if (authToken()) headers.Authorization = 'Bearer ' + authToken();
-  const r = await fetch('/api' + path, {method, headers, body:body === undefined ? undefined : JSON.stringify(body)});
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 30000);
+  let r;
+  try {
+    r = await fetch('/api' + path, {method, headers, body:body === undefined ? undefined : JSON.stringify(body), signal:controller.signal});
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('Memory save timed out. Please try again.');
+    throw error;
+  } finally { clearTimeout(timeout); }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || 'Could not save memory');
   return data;
@@ -363,6 +370,7 @@ function showMemory(m, fromJar) {
 let rec = null;
 function newStar() {
   const st = {color: COLORS[Math.floor(Math.random() * 6)], img: null, audio: null, url: null};
+  let saving = false;
   const {pw, p, x} = paperWrap(st.color);
   p.insertAdjacentHTML('beforeend', `<h3>fold a new star</h3>
     <textarea id="txt" maxlength="3000" placeholder="what made you happy? write it before it slips away…"></textarea>
@@ -387,21 +395,57 @@ function newStar() {
   vo.onclick = async () => {
     if (rec && rec.state === 'recording') return rec.stop();
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('voice notes need https or localhost');
+    if (typeof window.MediaRecorder !== 'function') return toast('voice recording is not supported in this browser');
     let stream; try { stream = await navigator.mediaDevices.getUserMedia({audio: true}); } catch (e) { return toast('microphone is blocked, allow it in the address bar'); }
-    const chunks = []; rec = new MediaRecorder(stream); rec.stream = stream;
-    rec.ondataavailable = e => chunks.push(e.data);
-    rec.onstop = () => { stream.getTracks().forEach(z => z.stop()); clearInterval(tm); vs.classList.remove('rec'); vs.textContent = '+ record again'; st.audio = new Blob(chunks, {type: rec.mimeType || 'audio/webm'}); draw(); };
-    const t0 = Date.now(); rec.start(); vs.classList.add('rec');
+    const stopTracks = () => stream.getTracks().forEach(z => z.stop());
+    const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+    let mimeType = '';
+    if (typeof MediaRecorder.isTypeSupported === 'function') {
+      try { mimeType = mimeCandidates.find(type => MediaRecorder.isTypeSupported(type)) || ''; } catch {}
+      if (!mimeType) { stopTracks(); return toast('voice recording format is not supported in this browser'); }
+    }
+    const chunks = [];
+    try {
+      rec = mimeType ? new MediaRecorder(stream, {mimeType}) : new MediaRecorder(stream);
+      rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+      rec.onstop = () => { stopTracks(); clearInterval(tm); vs.classList.remove('rec'); vs.textContent = '+ record again'; st.audio = new Blob(chunks, {type: rec.mimeType || mimeType || 'audio/webm'}); draw(); };
+      rec.start();
+    } catch (error) {
+      stopTracks(); rec = null; return toast('could not start voice recording in this browser');
+    }
+    const t0 = Date.now(); vs.classList.add('rec');
     const tm = setInterval(() => { const s = Math.floor((Date.now() - t0) / 1000); vs.textContent = `● stop ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; if (s >= 180) rec.stop(); }, 250);
   };
   $('#save', p).onclick = async () => {
-    stopRec(); await sleep(150);
-    const text = $('#txt', p).value.trim();
-    if (!text && !st.img && !st.audio) return toast('add some words, a photo or a voice note first');
-    const m = {id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), t: new Date($('#dt', p).value + 'T12:00').getTime() || Date.now(), made: Date.now(), text, color: st.color, img: st.img, audio: st.audio};
-    await db.put(m); o.close(); go('jarscr');
-    mem = mem.filter(z => z.id !== m.id); layer.innerHTML = ''; mem.forEach((z, i) => layer.append(jarStar(z, i)));
-    await sleep(900); dropStar(m);
+    if (saving) return;
+    saving = true;
+    const saveButton = $('#save', p);
+    if (saveButton) saveButton.disabled = true;
+    const saveLabel = saveButton?.querySelector('span'), originalSaveLabel = saveLabel?.innerHTML;
+    if (saveLabel) saveLabel.textContent = 'saving…';
+    let persisted = false, m = null;
+    try {
+      if (rec && rec.state === 'recording') { stopRec(); await sleep(150); }
+      const text = $('#txt', p).value.trim();
+      if (!text && !st.img && !st.audio) return toast('add some words, a photo or a voice note first');
+      m = {id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), t: new Date($('#dt', p).value + 'T12:00').getTime() || Date.now(), made: Date.now(), text, color: st.color, img: st.img, audio: st.audio};
+      await db.put(m); persisted = true; o.close(); go('jarscr');
+      mem = mem.filter(z => z.id !== m.id); layer.innerHTML = ''; mem.forEach((z, i) => layer.append(jarStar(z, i)));
+      await sleep(900); await dropStar(m);
+    } catch (error) {
+      if (persisted) {
+        if (!mem.some(z => z.id === m.id)) mem.push(m);
+        mem.sort((a, b) => a.made - b.made);
+        renderJar();
+        toast('Memory saved, but the jar animation could not finish.');
+      } else {
+        toast(error?.message || 'Could not save memory. Please try again.');
+      }
+    } finally {
+      saving = false;
+      if (saveLabel?.isConnected && originalSaveLabel !== undefined) saveLabel.innerHTML = originalSaveLabel;
+      if (saveButton?.isConnected) saveButton.disabled = false;
+    }
   };
 }
 function shrink(file) {

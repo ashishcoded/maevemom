@@ -1701,10 +1701,11 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 #s-home .hn-profile-links svg,#s-home .hn-profile-summary svg{flex:0 0 18px;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;color:rgba(255,255,255,.90)}
 #s-home .hn-profile-summary .profile-edit-icon svg{flex:0 0 20px;width:20px;height:20px}
 
-/* Magic Canvas */
-.magic-canvas-overlay{z-index:16000;padding:18px;background:rgba(0,0,0,.66);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-.magic-canvas-modal{display:flex;flex-direction:column;width:min(1180px,96vw);height:min(850px,94vh);overflow:hidden;border:1px solid rgba(255,255,255,.16);border-radius:20px;background:#0b0f0c;box-shadow:0 28px 90px rgba(0,0,0,.62)}
-.magic-canvas-header{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:64px;padding:11px 18px;border-bottom:1px solid rgba(255,255,255,.10);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.025));color:#fff}
+/* Magic Canvas: fill the browser viewport without using the Fullscreen API.
+   This keeps browser tabs, the address bar, and the OS taskbar visible. */
+.magic-canvas-overlay{z-index:16000;padding:0;background:rgba(0,0,0,.66);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.magic-canvas-modal{display:flex;flex-direction:column;width:100vw;height:100vh;height:100dvh;overflow:hidden;border:0;border-radius:0;background:#0b0f0c;box-shadow:none}
+.magic-canvas-header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex:0 0 64px;min-height:64px;padding:11px 18px;border-bottom:1px solid rgba(255,255,255,.10);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.025));color:#fff}
 .magic-canvas-header h3{margin:0;font:600 18px/1.2 var(--hn-font,system-ui,sans-serif)}
 .magic-canvas-header p{margin:4px 0 0;color:rgba(255,255,255,.58);font-size:12px}
 .magic-canvas-header .mx{flex:0 0 34px;width:34px;height:34px}
@@ -1713,7 +1714,7 @@ overflow:hidden;transform-style:preserve-3d;transform:perspective(1100px) rotate
 .memory-lane-fullscreen .memory-lane-modal{width:100vw;height:100vh;border:0;border-radius:0;box-shadow:none}
 .memory-lane-fullscreen .magic-canvas-header{display:none}
 .memory-lane-fullscreen #memory-lane-frame{background:#fbf4ea}
-@media(max-width:640px){.magic-canvas-overlay{padding:0}.magic-canvas-modal{width:100vw;height:100vh;border-radius:0}.magic-canvas-header{min-height:58px;padding:9px 13px}.magic-canvas-header p{display:none}}
+@media(max-width:640px){.magic-canvas-overlay{padding:0}.magic-canvas-modal{width:100vw;height:100vh;height:100dvh;border-radius:0}.magic-canvas-header{flex-basis:58px;min-height:58px;padding:9px 13px}.magic-canvas-header p{display:none}}
 
 /* Quick Alert feature panel */
 #s-home .hn-profile-summary .profile-edit-icon{cursor:pointer;transition:background .18s ease,color .18s ease}

@@ -14,12 +14,23 @@
   video{position:fixed;inset:0;width:100vw;height:100vh;object-fit:cover;transform:scaleX(-1);background:#0b0f0c;opacity:0;pointer-events:none;z-index:0;transition:opacity .25s ease}
   body.camera-live video{opacity:1}
   #cv{position:fixed;inset:0;width:100vw;height:100vh;display:block;touch-action:none;z-index:1;cursor:crosshair}
+  #mirrorHost{position:fixed;inset:0;z-index:4;background:#1a0405;display:none}
+  #mirrorHost.open{display:block}
+  #mirrorFrame{display:block;width:100%;height:100%;border:0}
+  body.mirror-mode{background:
+    repeating-linear-gradient(0deg,rgba(35,0,0,.38) 0 2px,transparent 2px 70px),
+    repeating-linear-gradient(90deg,rgba(35,0,0,.34) 0 2px,transparent 2px 70px),
+    radial-gradient(ellipse at 50% 35%,#b3201c 0,#7a0f12 58%,#3a0508 100%)}
+  body.mirror-mode #v,body.mirror-mode #cv,body.mirror-mode #status,body.mirror-mode #hint,body.mirror-mode #toggle,body.mirror-mode #shutter,body.mirror-mode #clear,body.mirror-mode #rec,body.mirror-mode #toast,body.mirror-mode #flash{display:none}
+  body.mirror-mode #modes{z-index:25}
   .glass{background:rgba(90,90,90,.5);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
-  #modes{position:fixed;top:22px;left:50%;transform:translateX(-50%);display:flex;gap:10px;padding:8px 10px;border-radius:999px;z-index:5}
-  .mode{width:54px;height:54px;border-radius:50%;border:2px solid transparent;background:transparent;display:grid;place-items:center;cursor:pointer;opacity:.6;transition:.25s;padding:0}
-  .mode svg{width:30px;height:30px}
-  .mode:hover{opacity:.9}
-  .mode.active{opacity:1;border-color:#e9a3b8;background:rgba(255,255,255,.14);box-shadow:0 0 18px rgba(233,163,184,.45)}
+  #modes{position:fixed;top:20px;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:7px 8px;border:1px solid rgba(255,255,255,.28);border-radius:999px;z-index:5;background:linear-gradient(135deg,rgba(255,255,255,.34),rgba(150,150,160,.28));box-shadow:0 10px 28px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.42);backdrop-filter:blur(24px) saturate(1.25);-webkit-backdrop-filter:blur(24px) saturate(1.25);cursor:default;touch-action:none;user-select:none}
+  body.mirror-mode #modes{cursor:grab}
+  #modes.dragging{cursor:grabbing}
+  .mode{width:48px;height:48px;border-radius:50%;border:2px solid transparent;background:rgba(255,255,255,.04);display:grid;place-items:center;cursor:pointer;opacity:.7;transition:transform .25s,opacity .25s,background .25s,box-shadow .25s;padding:0}
+  .mode svg{width:27px;height:27px}.mode span{font-family:"Apple Color Emoji","Segoe UI Emoji",sans-serif;font-size:25px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.25))}
+  .mode:hover{opacity:1;transform:translateY(-2px)}
+  .mode.active{opacity:1;border-color:#f2a6c0;background:rgba(255,255,255,.18);box-shadow:0 0 0 3px rgba(242,166,192,.16),0 0 24px rgba(233,163,184,.52)}
   #status{position:fixed;top:96px;left:50%;transform:translateX(-50%);padding:8px 16px;border-radius:999px;font-size:13px;z-index:5;opacity:0;transition:opacity .4s;max-width:90vw;text-align:center;pointer-events:none}
   #hint{position:fixed;left:50%;bottom:190px;transform:translateX(-50%);padding:12px 22px;border-radius:999px;font-size:15px;letter-spacing:.2px;white-space:nowrap;z-index:5}
   #toggle{position:fixed;left:50%;bottom:126px;transform:translateX(-50%);display:flex;padding:5px;border-radius:999px;z-index:5}
@@ -53,19 +64,18 @@
 
 <div id="modes" class="glass">
   <button class="mode active" data-m="flower" aria-label="Flowers">
-    <svg viewBox="0 0 32 32"><g fill="#fff">
-      <ellipse cx="16" cy="7" rx="3" ry="5.5"/><ellipse cx="16" cy="25" rx="3" ry="5.5"/>
-      <ellipse cx="7" cy="16" rx="5.5" ry="3"/><ellipse cx="25" cy="16" rx="5.5" ry="3"/>
-      <ellipse cx="9.6" cy="9.6" rx="3" ry="5.2" transform="rotate(-45 9.6 9.6)"/><ellipse cx="22.4" cy="22.4" rx="3" ry="5.2" transform="rotate(-45 22.4 22.4)"/>
-      <ellipse cx="22.4" cy="9.6" rx="3" ry="5.2" transform="rotate(45 22.4 9.6)"/><ellipse cx="9.6" cy="22.4" rx="3" ry="5.2" transform="rotate(45 9.6 22.4)"/></g>
-      <circle cx="16" cy="16" r="4.6" fill="#ffc83d"/></svg>
+    <span aria-hidden="true">🌼</span>
   </button>
   <button class="mode" data-m="star" aria-label="Constellations">
-    <svg viewBox="0 0 32 32"><path fill="#e3c06a" d="M16 3l3.8 8.4 9.2 1-6.9 6.1 2 9L16 22.7 7.9 27.5l2-9L3 12.4l9.2-1z"/></svg>
+    <span aria-hidden="true">⭐</span>
   </button>
-  <button class="mode" data-m="ball" aria-label="Aurora orbs">
-    <svg viewBox="0 0 32 32"><defs><radialGradient id="auroraIcon"><stop stop-color="#fff7c7"/><stop offset=".4" stop-color="#8ff5e8"/><stop offset="1" stop-color="#7765e8"/></radialGradient></defs><circle cx="16" cy="16" r="11.5" fill="url(#auroraIcon)"/><path d="M5 20c5-7 10 7 22-4M7 24c5-5 10 3 18-3" fill="none" stroke="#d7ffff" stroke-width="1.2" opacity=".85"/><circle cx="11" cy="10" r="2" fill="#fff" opacity=".8"/></svg>
+  <button class="mode" data-m="mirror" aria-label="Lipstick mirror">
+    <span aria-hidden="true" style="font-size:29px;line-height:1">💄</span>
   </button>
+</div>
+
+<div id="mirrorHost" aria-label="Lipstick mirror">
+  <iframe id="mirrorFrame" title="Lipstick mirror" allow="camera *; microphone *; fullscreen" src="about:blank"></iframe>
 </div>
 
 <div id="status" class="glass"></div>
@@ -88,6 +98,7 @@
 (() => {
 const $ = s => document.querySelector(s);
 const video=$('#v'), cv=$('#cv'), ctx=cv.getContext('2d',{alpha:true,desynchronized:true});
+const mirrorHost=$('#mirrorHost'), mirrorFrame=$('#mirrorFrame');
 const rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.random()*a.length|0], clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 let W=0,H=0,DPR=1,vig=null;
 function resize(){
@@ -159,8 +170,47 @@ const WINDLIFT={flower:-90,star:-260,ball:220};
 let mode='flower';
 const HINTS={flower:'Point to draw · Swipe, shake, rub, or push your open hand to wipe',star:'Draw a constellation · Swipe, shake, rub, or push to clear',ball:'Create aurora orbs · Swipe, shake, rub, or push to clear'};
 document.querySelectorAll('.mode').forEach(b=>b.onclick=()=>{
-  mode=b.dataset.m; document.querySelectorAll('.mode').forEach(x=>x.classList.toggle('active',x===b)); $('#hint').textContent=HINTS[mode];
+  if(modesDrag.moved){modesDrag.moved=false;return;}
+  mode=b.dataset.m; document.querySelectorAll('.mode').forEach(x=>x.classList.toggle('active',x===b));
+  if(mode==='mirror'){
+    document.body.classList.add('mirror-mode');
+    mirrorHost.classList.add('open');
+    if(mirrorFrame.getAttribute('src')==='about:blank') mirrorFrame.src='/lipstick-mirror.html';
+    return;
+  }
+  document.body.classList.remove('mirror-mode');
+  mirrorHost.classList.remove('open');
+  // Reloading the child releases its camera stream before returning to the canvas.
+  mirrorFrame.src='about:blank';
+  modes.style.left='50%';modes.style.top='20px';modes.style.transform='translateX(-50%)';
+  $('#hint').textContent=HINTS[mode];
 });
+const modes=$('#modes');
+const modesDrag={active:false,moved:false,pointerId:null,dx:0,dy:0};
+modes.addEventListener('pointerdown',event=>{
+  if(!document.body.classList.contains('mirror-mode'))return;
+  // Mode buttons must remain ordinary clickable controls; drag from the pill's glass area.
+  if(event.target.closest('.mode')){modesDrag.moved=false;return;}
+  if(event.button!==undefined&&event.button!==0)return;
+  const rect=modes.getBoundingClientRect();
+  modesDrag.active=true;modesDrag.moved=false;modesDrag.pointerId=event.pointerId;
+  modesDrag.dx=event.clientX-rect.left;modesDrag.dy=event.clientY-rect.top;
+  modes.setPointerCapture?.(event.pointerId);modes.classList.add('dragging');
+});
+modes.addEventListener('pointermove',event=>{
+  if(!document.body.classList.contains('mirror-mode')||!modesDrag.active||event.pointerId!==modesDrag.pointerId)return;
+  const rect=modes.getBoundingClientRect();
+  if(!modesDrag.moved&&Math.hypot(event.clientX-(rect.left+modesDrag.dx),event.clientY-(rect.top+modesDrag.dy))<4)return;
+  modesDrag.moved=true;
+  const maxX=Math.max(0,innerWidth-rect.width),maxY=Math.max(0,innerHeight-rect.height);
+  const x=clamp(event.clientX-modesDrag.dx,0,maxX),y=clamp(event.clientY-modesDrag.dy,0,maxY);
+  modes.style.left=`${x}px`;modes.style.top=`${y}px`;modes.style.transform='none';
+});
+const stopModesDrag=event=>{
+  if(!modesDrag.active||event.pointerId!==modesDrag.pointerId)return;
+  modesDrag.active=false;modes.classList.remove('dragging');modes.releasePointerCapture?.(event.pointerId);
+};
+modes.addEventListener('pointerup',stopModesDrag);modes.addEventListener('pointercancel',stopModesDrag);
 const strokes=[], P=[], HS={};
 const ptr={down:false,x:0,y:0};
 const amb=Array.from({length:18},()=>({x:Math.random(),y:Math.random(),vx:rnd(-.01,.012),vy:rnd(-.02,-.004),r:rnd(8,20),ph:rnd(0,6.28)}));

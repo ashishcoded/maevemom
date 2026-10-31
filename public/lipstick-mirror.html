@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lipstick Mirror</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#fff;--glow:255,90,40;--sans:'Inter',system-ui,sans-serif;--serif:'Instrument Serif',Georgia,serif}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#1a0405;color:var(--ink);font-family:var(--sans);overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+
+/* ---------- bathroom wall (CSS stand-in; drop a bg.jpg next to this file to replace it) ---------- */
+.scene,.photo,.shade{position:fixed;inset:0}
+.scene{background:
+ repeating-linear-gradient(0deg,rgba(20,0,0,.55) 0 2px,transparent 2px 70px),
+ repeating-linear-gradient(90deg,rgba(20,0,0,.5) 0 2px,transparent 2px 70px),
+ radial-gradient(ellipse at 50% 40%,#b3201c 0,#7a0f12 55%,#3a0508 100%);filter:blur(1.5px) saturate(1.1);transform:scale(1.04)}
+.scene i{position:absolute;font-family:'Instrument Serif',serif;font-style:italic;color:rgba(255,255,255,.55);filter:blur(1.6px);line-height:.85;letter-spacing:-.02em;mix-blend-mode:screen}
+.scene .g1{left:3%;top:8%;font-size:clamp(70px,11vw,170px);transform:rotate(7deg)}
+.scene .g2{right:3%;top:2%;font-size:clamp(36px,5vw,80px);transform:rotate(-14deg);text-align:right}
+.scene .g3{left:0;bottom:6%;font-size:clamp(30px,4vw,60px);transform:rotate(-12deg);opacity:.6}
+.scene .g4{left:50%;top:14%;font-size:clamp(34px,4.5vw,70px);transform:translateX(-60%) rotate(-3deg);color:rgba(255,255,255,.4)}
+.scene .g5{left:50%;top:34%;font-size:clamp(30px,4vw,60px);transform:translateX(-30%) rotate(2deg);color:rgba(15,0,0,.7);mix-blend-mode:normal}
+.scene b{position:absolute;bottom:0;width:30px;height:72%;border-radius:20px 20px 0 0;background:linear-gradient(#fff,#ffd9d2);box-shadow:0 0 50px 14px rgba(255,200,190,.55);filter:blur(1px)}
+.scene .l1{left:calc(50% + 590px);width:44px}.scene .l2{left:calc(50% - 700px);width:20px;opacity:.5}
+.scene s{position:absolute;right:-6%;bottom:-10%;width:30%;height:85%;border:26px solid rgba(190,190,190,.5);border-radius:50% 50% 0 0;filter:blur(2px)}
+.photo{background:url(bg.jpg) center/cover no-repeat;filter:blur(2px) brightness(.85);transform:scale(1.04)}
+.shade{background:radial-gradient(ellipse at 50% 45%,transparent 25%,rgba(10,0,0,.7) 100%);pointer-events:none}
+
+/* ---------- layout ---------- */
+.app{position:relative;z-index:2;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;padding:16px 12px 52px;transition:opacity .5s}
+.mirror{position:relative;width:min(810px,94vw,calc((100vh - 270px)*4/3));aspect-ratio:4/3;border-radius:28px;overflow:hidden;background:#240608;
+ box-shadow:0 0 0 1px rgba(255,255,255,.28),0 0 70px 8px rgba(var(--glow),.55),0 0 160px 30px rgba(var(--glow),.25),0 30px 70px rgba(0,0,0,.6);
+ animation:rise .9s cubic-bezier(.2,.8,.2,1) both,breathe 5s ease-in-out 1s infinite;touch-action:none;cursor:crosshair;isolation:isolate}
+@keyframes rise{from{opacity:0;transform:translateY(24px) scale(.97);filter:blur(8px)}}
+@keyframes breathe{50%{box-shadow:0 0 0 1px rgba(255,255,255,.28),0 0 90px 12px rgba(var(--glow),.7),0 0 190px 40px rgba(var(--glow),.3),0 30px 70px rgba(0,0,0,.6)}}
+.mirror video,.mirror canvas,.fx{position:absolute;inset:0;width:100%;height:100%}
+video{object-fit:cover;transform:scaleX(-1);transition:filter .5s}
+canvas{pointer-events:none}
+#draw{filter:blur(.4px) drop-shadow(0 1px 2px rgba(60,0,10,.3))}
+.fx{pointer-events:none;transition:opacity .5s;opacity:0}
+.sheen{position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,rgba(255,255,255,.16) 0,rgba(255,255,255,0) 32%,rgba(255,255,255,0) 70%,rgba(255,255,255,.06));z-index:4}
+
+/* filters */
+[data-f=red] video{filter:saturate(1.15) contrast(1.05) brightness(.95)}
+[data-f=red] .fx.red{opacity:1;background:linear-gradient(180deg,rgba(255,125,105,.78),rgba(225,30,30,.56))}
+[data-f=nokia] video{filter:grayscale(1) sepia(1) hue-rotate(50deg) saturate(2.2) contrast(1.1) brightness(.95)}
+[data-f=nokia] .fx.scan{opacity:1;background:repeating-linear-gradient(0deg,rgba(10,30,0,.28) 0 2px,transparent 2px 5px),repeating-linear-gradient(90deg,rgba(10,30,0,.18) 0 2px,transparent 2px 5px)}
+[data-f=vhs] video{filter:saturate(1.5) contrast(1.12) blur(.6px) hue-rotate(-8deg) drop-shadow(3px 0 0 rgba(255,0,60,.35)) drop-shadow(-3px 0 0 rgba(0,200,255,.3))}
+[data-f=vhs] .fx.scan{opacity:1;background:repeating-linear-gradient(0deg,rgba(0,0,0,.2) 0 1px,transparent 1px 4px)}
+[data-f=vhs] .fx.noise{opacity:.16;animation:grain .5s steps(4) infinite}
+[data-f=vhs] .fx.bar{opacity:1;animation:track 4.5s linear infinite}
+[data-f=bw] video{filter:grayscale(1) contrast(1.15)}
+.fx.noise{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");mix-blend-mode:overlay}
+.fx.bar{background:linear-gradient(180deg,transparent 0,rgba(255,255,255,.14) 50%,transparent 100%);height:14%;top:-14%;bottom:auto}
+@keyframes grain{25%{transform:translate(-3%,2%)}50%{transform:translate(2%,-3%)}75%{transform:translate(-2%,-2%)}}
+@keyframes track{to{top:110%}}
+
+/* cursors */
+.tube{position:absolute;width:34px;height:102px;left:0;top:0;pointer-events:none;opacity:0;transition:opacity .2s;transform-origin:17px 6.8px;z-index:5;filter:drop-shadow(0 5px 6px rgba(0,0,0,.45));will-change:transform}
+.tube.on{opacity:.75}.tube.on.down{opacity:1}
+.ring{position:absolute;width:56px;height:56px;left:0;top:0;translate:-50% -50%;border:1.5px dashed #fff;border-radius:50%;opacity:0;pointer-events:none;transition:opacity .2s,scale .2s;z-index:5;scale:.8;display:grid;place-items:center}
+.ring::after{content:"";width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.9)}
+.ring.on{opacity:.9;scale:1}.ring.down{animation:spin 4s linear infinite;background:rgba(255,255,255,.12);border-style:solid}
+@keyframes spin{to{rotate:360deg}}
+
+/* palette */
+.palette{position:absolute;right:0;top:50%;translate:0 -50%;z-index:6;padding:12px 14px 16px;border-radius:16px 0 0 16px;background:rgba(200,200,200,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);display:flex;flex-direction:column;align-items:center;gap:12px;transition:translate .5s cubic-bezier(.2,.8,.2,1),opacity .4s}
+.palette.hide{translate:100% -50%;opacity:0}
+.palette small{font-size:7px;color:rgba(255,255,255,.7);letter-spacing:.02em;margin-bottom:-2px}
+.sw{--p:0;position:relative;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 35% 28%,rgba(255,255,255,.55),transparent 38%),var(--c);box-shadow:inset 0 -4px 8px rgba(0,0,0,.35),0 3px 8px rgba(0,0,0,.3);transition:transform .25s}
+.sw:hover{transform:scale(1.1)}
+.sw::after{content:"";position:absolute;inset:-5px;border-radius:50%;background:conic-gradient(#fff calc(var(--p)*1%),rgba(255,255,255,0) 0);-webkit-mask:radial-gradient(circle,transparent 17px,#000 18px,#000 20px,transparent 21px);mask:radial-gradient(circle,transparent 17px,#000 18px,#000 20px,transparent 21px)}
+.sw.sel::before{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid rgba(255,255,255,.95)}
+
+/* controls */
+.seg{display:flex;padding:3px;border-radius:99px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(8px);position:relative;transition:opacity .3s}
+.seg button{position:relative;z-index:1;padding:8px 17px;font-size:12.5px;border-radius:99px;color:rgba(255,255,255,.7);transition:color .3s,background .3s}
+.seg button.on{background:rgba(255,235,230,.8);color:#5a1a1a;font-weight:500}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
+.pill{display:inline-block;padding:10px 19px;font-size:13px;border-radius:99px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.06);backdrop-filter:blur(6px);transition:background .25s,transform .2s,border-color .25s,opacity .3s;color:#fff;text-decoration:none}
+.pill:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.7)}.pill:active{transform:scale(.95)}
+.pill.hot{background:linear-gradient(#e8283f,#a50f24);border-color:rgba(255,255,255,.45);font-weight:500;box-shadow:0 6px 20px rgba(200,20,40,.45)}
+.pill.hot:hover{background:linear-gradient(#f23a50,#b81429)}
+.shutter{width:68px;height:68px;border-radius:50%;border:2px solid rgba(255,255,255,.85);padding:6px;transition:transform .2s,opacity .3s;margin:0 6px}
+.shutter i{display:block;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 35% 28%,rgba(255,255,255,.45),transparent 40%),var(--cur,#d4142e);box-shadow:inset 0 -6px 12px rgba(0,0,0,.3);transition:background .3s,filter .3s}
+.shutter:hover{transform:scale(1.07)}.shutter:active{transform:scale(.92)}
+.busy .seg,.busy .row .pill{opacity:.35;pointer-events:none}
+.busy .shutter{pointer-events:none}.busy .shutter i{filter:grayscale(1) brightness(.8)}
+.stat{display:flex;align-items:center;gap:7px;font-size:11.5px;color:rgba(255,255,255,.88);height:16px;margin-top:-6px}
+.stat i{width:9px;height:9px;border-radius:50%;background:#e8a53a;transition:background .2s}
+.stat.draw i{background:#ff4d79;box-shadow:0 0 10px #ff4d79}.stat.erase i{background:#6aa8ff;box-shadow:0 0 10px #6aa8ff}.stat.ok i{background:#7ce0a0}
+.foot{position:fixed;bottom:16px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.7);z-index:2;transition:opacity .5s}
+.foot a{color:inherit;text-decoration:none}.foot a:hover{color:#fff}
+.inbooth .app,.inbooth .foot{opacity:0;pointer-events:none}
+
+/* countdown */
+.count{position:absolute;inset:0;z-index:7;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity .25s}
+.count.on{opacity:1}
+.count b{font-family:var(--serif);font-style:italic;font-weight:400;font-size:clamp(110px,26vw,300px);line-height:1;color:rgba(255,255,255,.6);text-shadow:0 0 70px rgba(255,70,70,.55)}
+.count b.pop{animation:pop .9s ease-out both}
+.count b.small{font-family:var(--sans);font-style:normal;font-size:clamp(15px,2.2vw,22px);letter-spacing:.02em;animation:none;color:rgba(255,255,255,.85);text-shadow:0 2px 14px rgba(0,0,0,.5)}
+.count small{position:absolute;bottom:16px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.75);text-shadow:0 1px 8px rgba(0,0,0,.5)}
+@keyframes pop{0%{transform:scale(1.5);opacity:0}25%{opacity:1}100%{transform:scale(.9);opacity:.7}}
+
+/* overlays */
+.flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:30}
+.flash.go{animation:fl .5s ease-out}@keyframes fl{0%{opacity:.95}100%{opacity:0}}
+.modal{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:rgba(8,0,1,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);opacity:0;pointer-events:none;transition:opacity .35s;padding:16px}
+.modal.open{opacity:1;pointer-events:auto}
+.card{width:min(940px,100%);max-height:94vh;overflow:auto;padding:34px 36px 28px;border-radius:24px;background:#170a0c;border:1px solid rgba(255,255,255,.14);transform:translateY(14px) scale(.98);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.modal.open .card{transform:none}
+.card h2{font-family:var(--serif);font-weight:400;font-size:32px;margin-bottom:24px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px 56px}
+.cols h4{font-size:13px;font-weight:500;margin-bottom:6px;color:#f5dcd8}.cols p,.keys{font-size:12.5px;line-height:1.65;color:rgba(255,255,255,.72)}.cols b{color:#fff}
+.keys{margin-top:20px}.keys h4{margin-bottom:6px}
+.card .end{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+
+/* photo booth */
+.booth{position:fixed;inset:0;z-index:22;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;
+ background:radial-gradient(ellipse at 50% 42%,rgba(8,0,2,.38),rgba(5,0,1,.9));opacity:0;visibility:hidden;transition:opacity .7s,visibility .7s}
+.booth.open{opacity:1;visibility:visible}
+.slot{position:relative;z-index:3;width:calc(var(--sw,320px) + 40px);height:16px;border-radius:8px 8px 3px 3px;background:linear-gradient(#030102,#1d0f11 55%,#050203);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 8px 18px rgba(0,0,0,.7)}
+.slot::after{content:"";position:absolute;left:12px;right:12px;bottom:3px;height:4px;border-radius:3px;background:#000;box-shadow:0 1px 0 rgba(255,255,255,.14)}
+.printing .slot{animation:buzz .09s linear 38}
+@keyframes buzz{50%{translate:0 1px}}
+.feed{position:relative;z-index:2;overflow:hidden;width:var(--sw,320px);height:var(--sh,480px);margin-top:-6px}
+.feed canvas{display:block;width:var(--sw,320px);height:var(--sh,480px);transform:translateY(-102%);box-shadow:0 18px 40px rgba(0,0,0,.6)}
+.printing .feed canvas{animation:print 3.6s forwards}
+.done .feed canvas{transform:none}
+@keyframes print{
+ 0%{transform:translateY(-102%)}
+ 17%{transform:translateY(-80%)}27%{transform:translateY(-80%)}
+ 44%{transform:translateY(-54%)}54%{transform:translateY(-54%)}
+ 71%{transform:translateY(-25%)}81%{transform:translateY(-25%)}
+ 100%{transform:translateY(0)}}
+.acts{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:22px;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .6s,transform .6s}
+.done .acts{opacity:1;transform:none;pointer-events:auto}
+
+.gate{position:fixed;inset:0;z-index:25;display:grid;place-items:center;text-align:center;background:rgba(20,2,4,.55);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);transition:opacity .6s,visibility .6s;padding:20px}
+.gate.gone{opacity:0;visibility:hidden}
+.gate h1{font-family:var(--serif);font-weight:400;font-size:clamp(44px,8vw,84px);line-height:1;margin-bottom:14px}
+.gate p{font-size:14px;color:rgba(255,255,255,.75);max-width:340px;margin:0 auto 26px;line-height:1.6}
+.gate .pill{background:#fff;color:#4a0e12;border-color:#fff;font-weight:500;padding:13px 28px}
+.gate .pill:hover{background:#ffe4df}
+.gate em{display:block;margin-top:16px;font-size:12px;color:#ffb3a8;min-height:16px;font-style:normal}
+@media(max-width:720px){.cols{grid-template-columns:1fr}.card{padding:24px}.seg button{padding:7px 12px}.pill{padding:9px 14px}.scene .l1,.scene .l2{display:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.printing .feed canvas{transform:none}}
+</style>
+</head>
+<body>
+<div class="scene"><i class="g1">boom<br>boom<br>boom</i><i class="g2">divas &amp;<br>davinas</i><i class="g3">life's<br>a song</i><i class="g4">thinkin<br>bout you</i><i class="g5">just about<br>half just</i><b class="l1"></b><b class="l2"></b><s></s></div>
+<div class="photo"></div><div class="shade"></div>
+
+<main class="app" id="app" data-f="normal">
+  <div class="mirror" id="mirror">
+    <video id="video" playsinline muted></video>
+    <div class="fx red"></div><div class="fx scan"></div><div class="fx noise"></div><div class="fx bar"></div>
+    <canvas id="draw" width="1280" height="960"></canvas>
+    <canvas id="fx2" width="1280" height="960"></canvas>
+    <canvas id="skel" width="1280" height="960"></canvas>
+    <svg class="tube" id="tube" viewBox="0 0 40 120" width="34" height="102" aria-hidden="true">
+      <defs>
+        <linearGradient id="gBul" x1="0" x2="1" y1="0" y2="0"><stop id="b0" offset="0" stop-color="#a50f22"/><stop id="b1" offset=".45" stop-color="#dc1a2f"/><stop id="b2" offset=".78" stop-color="#f0485a"/><stop id="b3" offset="1" stop-color="#a50f22"/></linearGradient>
+        <linearGradient id="gSil" x1="0" x2="1"><stop offset="0" stop-color="#6d6d72"/><stop offset=".3" stop-color="#f4f4f6"/><stop offset=".55" stop-color="#b9b9bf"/><stop offset=".8" stop-color="#ededf0"/><stop offset="1" stop-color="#707076"/></linearGradient>
+        <linearGradient id="gBody" x1="0" x2="1"><stop offset="0" stop-color="#050506"/><stop offset=".28" stop-color="#34343a"/><stop offset=".5" stop-color="#0e0e10"/><stop offset="1" stop-color="#020203"/></linearGradient>
+      </defs>
+      <rect x="9" y="62" width="22" height="54" rx="4" fill="url(#gBody)"/>
+      <rect x="9" y="104" width="22" height="5" fill="url(#gSil)"/>
+      <rect x="14" y="66" width="2.4" height="34" rx="1.2" fill="#fff" opacity=".28"/>
+      <rect x="10" y="46" width="20" height="17" rx="2.5" fill="url(#gSil)"/>
+      <rect x="10" y="53" width="20" height="1.2" fill="#000" opacity=".25"/>
+      <path d="M12 47 V15 Q12 12 15 10.6 L26.4 5.2 Q28 4.5 28 7 V47 Z" fill="url(#gBul)"/>
+      <path d="M13.6 14.6 L26 8.6" stroke="#fff" stroke-opacity=".6" stroke-width="1.4" stroke-linecap="round"/>
+      <rect x="14.5" y="18" width="2.4" height="24" rx="1.2" fill="#fff" opacity=".28"/>
+    </svg>
+    <div class="ring" id="ring"></div>
+    <div class="count" id="count"><b id="cnum">3</b><small id="clab"></small></div>
+    <div class="sheen"></div>
+    <aside class="palette" id="palette"><small>hover to select</small></aside>
+  </div>
+
+  <div class="seg" id="filters" role="group" aria-label="Filters">
+    <button data-f="normal" class="on">normal</button><button data-f="red">red light</button><button data-f="nokia">nokia</button><button data-f="vhs">vhs</button><button data-f="bw">b&amp;w</button>
+  </div>
+  <div class="row">
+    <button class="pill" id="undo">undo</button><button class="pill" id="clear">clear</button>
+    <button class="shutter" id="shutter" aria-label="Take photo"><i></i></button>
+    <button class="pill" id="track">disable hand tracking</button><button class="pill" id="how">how to</button>
+  </div>
+  <div class="stat" id="stat"><i></i><span>waking the mirror…</span></div>
+</main>
+<div class="flash" id="flash"></div>
+
+<div class="gate" id="gate"><div><h1>mirror,<br>mirror.</h1><p>Pinch your thumb and finger in the air to draw lipstick on your reflection. Your camera stays on your device.</p><button class="pill" id="start">Open the mirror</button><em id="err"></em></div></div>
+
+<div class="modal" id="howModal"><div class="card"><h2>How to</h2>
+ <div class="cols">
+  <div><h4>Draw</h4><p>Pinch thumb + index finger of your <b>right hand</b>. Move to draw, release to stop. Mouse works too.</p></div>
+  <div><h4>Erase</h4><p>Pinch with your <b>other hand</b> while you draw — the dashed ring wipes the lipstick away. With a mouse, hold Shift. <b>undo</b> / <b>clear</b> also work.</p></div>
+  <div><h4>Change colour</h4><p>Hover over a shade until the ring fills. Or click it.</p></div>
+  <div><h4>Already on the glass</h4><p>A heart and a few <b>xo</b> are written for you every time. Erase them, draw over them, or press <b>clear</b>.</p></div>
+  <div><h4>Snap to clear</h4><p>Snap your fingers (thumb + middle finger, quick flick) and everything dissolves into sparkles. <b>Clear</b> does the same. <b>undo</b> brings it back.</p></div>
+  <div><h4>Hands the wrong way round?</h4><p>Press <b>S</b> or <button class="pill" id="swap" style="padding:4px 12px;font-size:12px">swap hands</button> to flip which hand draws.</p></div>
+  <div><h4>Fix your hair</h4><p>Turn off <b>hand tracking</b> so the mirror ignores your hands. Turn it back on to draw.</p></div>
+  <div><h4>Take photos</h4><p>Press the big button (or make an L with both hands and hold). It counts 3‑2‑1, snaps, waits a moment, counts again, snaps — then prints your strip. Add <b>kisses</b>, then save.</p></div>
+ </div>
+ <div class="keys"><h4>Keyboard controls</h4>S — swap hands · C — clear · Space / Enter — photo · 1–6 — colour · [ ] / ↑ ↓ — switch colours · N / L / K / V / B — filters · H — hand tracking · P — palette · ⌘/Ctrl + Z — undo · Esc — close</div>
+ <div class="end"><button class="pill" data-close>Close</button></div></div></div>
+
+<div class="booth" id="booth">
+  <div class="slot"></div>
+  <div class="feed"><canvas id="stripC"></canvas></div>
+  <div class="acts"><button class="pill" id="kiss">kisses</button><button class="pill hot" id="save">save photo</button><button class="pill" id="back">back to the mirror</button></div>
+</div>
+
+<script type="module">
+const $=s=>document.querySelector(s), W=1280, H=960;
+const COLORS=['#dc1a2f','#e8261d','#8a0f25','#e83f8f','#e8643a','#a8554c'];
+const FILTERS={normal:'none',red:'saturate(1.15) contrast(1.05) brightness(.95)',nokia:'grayscale(1) sepia(1) hue-rotate(50deg) saturate(2.2) contrast(1.1) brightness(.95)',vhs:'saturate(1.5) contrast(1.12) blur(.6px) hue-rotate(-8deg)',bw:'grayscale(1) contrast(1.15)'};
+const KEYF={n:'normal',l:'red',k:'nokia',v:'vhs',b:'bw'};
+const MODEL='https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+/* MediaPipe labels assume a mirrored image; we feed the raw one, so "Left" is the user's right hand. Flip if yours is reversed. */
+const RAW_LEFT_IS_USER_RIGHT=false; /* your camera is already mirrored, so labels are used as-is */
+let swapped=false;try{swapped=localStorage.getItem('mirror-swap')==='1'}catch(e){}
+const PEN=24, EW=84; /* lipstick width / eraser diameter, in canvas units */
+
+const video=$('#video'),mirror=$('#mirror'),app=$('#app'),pal=$('#palette');
+const dc=$('#draw'),dctx=dc.getContext('2d'),sc=$('#skel'),sctx=sc.getContext('2d');
+const tube=$('#tube'),ring=$('#ring'),stat=$('#stat');
+let ci=0,filter='normal',tracking=true,lm=null,CONN=[],camOn=false,lastT=-1,miss=0,mouseIn=null,lastShot=0,lHold=0,shooting=false;
+const undoStack=[];
+const mk=()=>({vis:false,down:false,was:false,x:0,y:0,lx:0,ly:0,mx:0,my:0,up:0,mouse:false,hand:false});
+const D=mk(),E=mk();
+
+/* ---------- colour helpers ---------- */
+const mix=(h,t,a)=>{const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));return'#'+c.map((v,i)=>Math.round(v+(t[i]-v)*a).toString(16).padStart(2,'0')).join('')};
+const lighten=(h,a)=>mix(h,[255,255,255],a),darken=(h,a)=>mix(h,[0,0,0],a);
+
+/* ---------- palette ---------- */
+const sws=COLORS.map((c,i)=>{const b=document.createElement('button');b.className='sw';b.style.setProperty('--c',c);b.setAttribute('aria-label','Colour '+(i+1));b.onclick=()=>pick(i);pal.append(b);return b});
+function pick(i){ci=(i+COLORS.length)%COLORS.length;const c=COLORS[ci];sws.forEach((s,j)=>s.classList.toggle('sel',j===ci));
+ $('#shutter').style.setProperty('--cur',c);
+ $('#b0').setAttribute('stop-color',darken(c,.38));$('#b1').setAttribute('stop-color',c);$('#b2').setAttribute('stop-color',lighten(c,.3));$('#b3').setAttribute('stop-color',darken(c,.4));
+ document.documentElement.style.setProperty('--glow',ci===3?'255,70,150':'255,90,40')}
+pick(0);
+
+/* ---------- geometry ---------- */
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function map(l){const vw=video.videoWidth,vh=video.videoHeight,s=Math.max(W/vw,H/vh),dx=(vw*s-W)/2,dy=(vh*s-H)/2;return{x:W-(l.x*vw*s-dx),y:l.y*vh*s-dy}}
+const toClient=p=>{const r=mirror.getBoundingClientRect();return{x:r.left+p.x/W*r.width,y:r.top+p.y/H*r.height}};
+const toCanvas=(cx,cy)=>{const r=mirror.getBoundingClientRect();return{x:(cx-r.left)/r.width*W,y:(cy-r.top)/r.height*H}};
+const overPalette=(p)=>{if(pal.classList.contains('hide'))return false;const c=toClient(p),r=pal.getBoundingClientRect();return c.x>r.left-10&&c.x<r.right&&c.y>r.top-10&&c.y<r.bottom+10};
+
+/* ---------- drawing ---------- */
+function pushUndo(){undoStack.push(dctx.getImageData(0,0,W,H));if(undoStack.length>12)undoStack.shift()}
+/* ---------- bristle lipstick brush: streaky, darker edges, lighter centre band, rough edge ---------- */
+function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const hexRGB=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const lerpC=(a,b,t)=>`rgb(${(a[0]+(b[0]-a[0])*t)|0},${(a[1]+(b[1]-a[1])*t)|0},${(a[2]+(b[2]-a[2])*t)|0})`;
+function newBrush(col,w,r=Math.random){
+ const c=hexRGB(col),N=11,bs=[];
+ for(let j=0;j<N;j++){const u=j/(N-1),prof=1-Math.pow(Math.abs(2*u-1),1.6);
+  bs.push({o:(u-.5)*(w-w/N*1.5),t:.25+prof*.6+(r()-.5)*.5,ph:r()*6.28,ph2:r()*6.28,fr:.02+r()*.05,wd:w/N*(1.9+r()*.8)})}
+ return{w,bs,r,ang:null,len:0,
+  dark:c.map(v=>v*.78),
+  light:[c[0]+(255-c[0])*.1,c[1]+(255-c[1])*.2,c[2]+(255-c[2])*.1],
+  base:c}}
+function bseg(B,a,b){
+ const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),n=Math.ceil(d/4);
+ if(n>1){let q=a;for(let i=1;i<=n;i++){const t=i/n,m={x:a.x+dx*t,y:a.y+dy*t};bseg1(B,q,m);q=m}return}
+ bseg1(B,a,b)}
+function bseg1(B,a,b){
+ const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
+ let ang=d>.01?Math.atan2(dy,dx):(B.ang==null?0:B.ang);
+ if(B.ang==null)B.ang=ang;else{let da=ang-B.ang;da=Math.atan2(Math.sin(da),Math.cos(da));B.ang+=da*.5}
+ const nx=-Math.sin(B.ang),ny=Math.cos(B.ang),x=dctx;
+ x.save();x.lineCap='round';x.lineJoin='round';
+ for(const s of B.bs){
+  const tone=Math.max(0,Math.min(1,s.t+.13*Math.sin(B.len*s.fr+s.ph))),o=s.o+.7*Math.sin(B.len*.17+s.ph2);
+  x.strokeStyle=lerpC(B.dark,B.light,tone);x.lineWidth=s.wd;
+  x.beginPath();x.moveTo(a.x+nx*o,a.y+ny*o);x.lineTo(b.x+nx*o+.01,b.y+ny*o);x.stroke()}
+ x.restore();B.len+=d}
+/* eraser: blurs + fades the lipstick under it, so it looks like it is being rubbed off */
+const tmp=document.createElement('canvas');tmp.width=tmp.height=128;const tctx=tmp.getContext('2d');
+function stamp(x,y,k=.34){
+ const r=EW/2+8,c=dctx;
+ tctx.globalCompositeOperation='source-over';tctx.clearRect(0,0,128,128);
+ tctx.filter='blur(3.5px)';tctx.drawImage(dc,x-r,y-r,2*r,2*r,0,0,2*r,2*r);tctx.filter='none';
+ tctx.globalCompositeOperation='destination-in';
+ const m=tctx.createRadialGradient(r,r,r*.2,r,r,r);m.addColorStop(0,'rgba(0,0,0,1)');m.addColorStop(1,'rgba(0,0,0,0)');tctx.fillStyle=m;tctx.fillRect(0,0,2*r,2*r);
+ c.save();c.globalCompositeOperation='destination-out';
+ const g=c.createRadialGradient(x,y,r*.15,x,y,r);g.addColorStop(0,`rgba(0,0,0,${k})`);g.addColorStop(.6,`rgba(0,0,0,${k*.6})`);g.addColorStop(1,'rgba(0,0,0,0)');
+ c.fillStyle=g;c.fillRect(x-r,y-r,2*r,2*r);
+ c.globalCompositeOperation='source-over';c.globalAlpha=.16;c.drawImage(tmp,0,0,2*r,2*r,x-r,y-r,2*r,2*r);c.restore()}
+function wipe(a,b,k){const n=Math.max(1,Math.ceil(dist(a,b)/7));for(let i=1;i<=n;i++){const t=i/n;stamp(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,k)}}
+function apply(S,erase){
+ if(!S.vis||!S.down){if(S.was&&++S.up>5)S.was=false;return}
+ S.up=0;
+ const p={x:S.x,y:S.y};
+ if(overPalette(p)&&!S.was){return}
+ if(!S.was){pushUndo();S.lx=p.x;S.ly=p.y;S.was=true;if(erase)stamp(p.x,p.y);else{S.br=newBrush(COLORS[ci],PEN);bseg(S.br,p,p)}return}
+ const a={x:S.lx,y:S.ly};if(dist(a,p)<1.5)return;
+ if(erase)wipe(a,p);else bseg(S.br,a,p);
+ S.lx=p.x;S.ly=p.y}
+$('#undo').onclick=undo;function undo(){const s=undoStack.pop();if(s)dctx.putImageData(s,0,0)}
+
+/* ---------- pre-written marks: heart + xo xo, traced from a real hand-drawn lipstick sample ---------- */
+function spline(P,per=12){const out=[];for(let i=0;i<P.length-1;i++){const p0=P[Math.max(0,i-1)],p1=P[i],p2=P[i+1],p3=P[Math.min(P.length-1,i+2)];
+ for(let s=0;s<per;s++){const t=s/per,t2=t*t,t3=t2*t,f=(a,b,c,d)=>.5*(2*b+(-a+c)*t+(2*a-5*b+4*c-d)*t2+(-a+3*b-3*c+d)*t3);out.push({x:f(p0.x,p1.x,p2.x,p3.x),y:f(p0.y,p1.y,p2.y,p3.y)})}}
+ out.push(P[P.length-1]);return out}
+function shake(P,r,amp=1.7){const a=r()*6,b=r()*6;return P.map((p,i)=>({x:p.x+Math.sin(i*.09+a)*amp+(r()-.5)*.8,y:p.y+Math.cos(i*.08+b)*amp+(r()-.5)*.8}))}
+function paint(P,r,w=20){const pts=shake(spline(P),r),B=newBrush(COLORS[0],w,r);for(let i=1;i<pts.length;i++)bseg(B,pts[i-1],pts[i])}
+const ellC=(cx,cy,rx,ry,rot,a0,turn,grow)=>{const n=26,p=[],cr=Math.cos(rot),sr=Math.sin(rot);for(let i=0;i<=n;i++){const t=i/n,a=a0+turn*t,k=1+grow*t,x=Math.cos(a)*rx*k,y=Math.sin(a)*ry*k;p.push({x:cx+x*cr-y*sr,y:cy+x*sr+y*cr})}return p};
+function drawPresets(){
+ const r=rng(11),K=1280/810,pt=(ox,oy)=>q=>({x:(q.x/3+ox-90)*K,y:(q.y/3+oy-25)*K}),
+  Q=a=>a.map(([x,y])=>({x,y}));
+ const hm=pt(130,340),xm=pt(570,50);
+ /* heart: left lobe, sharp V, tall right lobe, tail ends below the start */
+ const heart=Q([[278,540],[225,505],[165,430],[110,340],[80,250],[68,170],[82,128],[120,108],[165,135],[225,195],[285,255],[325,300],[338,265],[335,190],[338,120],[365,65],[405,52],[432,85],[442,160],[440,250],[425,330],[398,410],[360,470],[320,520],[285,570],[262,607]]).map(hm);
+ paint(heart,r,19);
+ /* xo / xo */
+ const S=(a,m)=>paint(Q(a).map(m),r,17);
+ S([[80,95],[120,160],[170,230],[215,295],[255,350]],xm);
+ S([[188,95],[170,170],[150,260],[135,340],[135,415]],xm);
+ paint(ellC(388,200,66,156,.07,-1.8,Math.PI*2+.5,.04).map(xm),r,17);
+ S([[48,540],[95,590],[150,650],[190,710],[222,748]],xm);
+ S([[132,535],[122,600],[118,690],[115,780],[112,830]],xm);
+ paint(ellC(405,648,82,138,-.12,-1.7,Math.PI*2+.55,.04).map(xm),r,17);
+ /* the rubbed-off bits the sample has: right side of the heart + foot of the 2nd x */
+ const f1=hm({x:410,y:370}),f2=hm({x:335,y:495});wipe(f1,f2,.3);
+ const g1=xm({x:112,y:790}),g2=xm({x:112,y:845});wipe(g1,g2,.34)}
+drawPresets();
+
+/* ---------- hands ---------- */
+const smooth=(S,t,a)=>{S.hand=false;if(!S.vis){S.x=t.x;S.y=t.y}else{S.x+=(t.x-S.x)*a;S.y+=(t.y-S.y)*a}S.vis=true};
+/* hands: set a target, then glide toward it every animation frame (60fps) so lines stay smooth between camera frames */
+const aim=(S,t)=>{S.hand=true;S.tx=t.x;S.ty=t.y;if(!S.vis){S.x=t.x;S.y=t.y}S.vis=true};
+function follow(S){if(S.mouse||!S.vis||!S.hand)return;const d=Math.hypot(S.tx-S.x,S.ty-S.y),a=Math.min(.75,.2+d/70);S.x+=(S.tx-S.x)*a;S.y+=(S.ty-S.y)*a}
+const pc=h=>({x:(h.P[4].x+h.P[8].x)/2,y:(h.P[4].y+h.P[8].y)/2});
+/* only a deliberate pinch puts the pen down; a flicker of a frame won't lift it */
+function pinch(S,P){const hs=(dist(P[0],P[9])+dist(P[5],P[17]))/2||1,r=dist(P[4],P[8])/hs;
+ if(S.down){if(r>.46){S.rel=(S.rel||0)+1;if(S.rel>=3){S.down=false;S.pc=0;S.rel=0}}else S.rel=0}
+ else if(r<.24){S.pc=(S.pc||0)+1;if(S.pc>=2){S.down=true;S.rel=0}}else S.pc=0;
+ if(!(S.down&&r>.34))aim(S,pc({P}))}
+const isL=P=>{const hs=dist(P[0],P[9])||1;return[[12,10],[16,14],[20,18]].every(([t,p])=>dist(P[t],P[0])<dist(P[p],P[0])*1.05)&&dist(P[8],P[0])>hs*1.5&&dist(P[4],P[5])>hs*.7&&dist(P[4],P[8])>hs*1.1};
+let handHover=null;
+/* follow each physical hand across frames and vote on which one it is (left/right) from MediaPipe's label */
+const slots=[{p:null,s:0},{p:null,s:0}];
+function track(hands){
+ const used=[false,false];
+ hands.forEach(h=>{h.c=pc(h);let best=-1,bd=320;
+  slots.forEach((sl,i)=>{if(!used[i]&&sl.p){const d=dist(sl.p,h.c);if(d<bd){bd=d;best=i}}});
+  const sgn=h.right?1:-1;
+  if(best<0){best=used[0]?1:0;slots[best].s=sgn*.6}
+  used[best]=true;const sl=slots[best];sl.s=sl.s*.92+sgn*.08;sl.p=h.c;h.sl=sl;h.sc=sl.s});
+ slots.forEach((sl,i)=>{if(!used[i])sl.p=null})}
+/* right hand = lipstick, left hand = eraser */
+function assign(hands){
+ if(hands.length>1){const [a,b]=hands;return a.sc>=b.sc?{dh:a,eh:b}:{dh:b,eh:a}}
+ return hands[0].sc>=0?{dh:hands[0],eh:null}:{dh:null,eh:hands[0]}}
+let lastSnap=0,snapArm=0;
+function process(res){
+ sctx.clearRect(0,0,W,H);
+ const hands=(res.landmarks||[]).slice(0,2).map((l,i)=>{const lab=res.handedness[i][0].categoryName;return{P:l.map(map),right:((lab==='Left')===RAW_LEFT_IS_USER_RIGHT)!==swapped}});
+ if(!hands.length){if(++miss>5){D.vis=E.vis=false;D.down=E.down=false;D.hand=E.hand=false;handHover=null;lHold=0;slots.forEach(s=>s.p=null)}return}
+ miss=0;
+ track(hands);
+ const {dh,eh}=assign(hands);
+ if(!D.mouse){if(dh)pinch(D,dh.P);else{D.vis=false;D.down=false;D.hand=false}}
+ if(!E.mouse){if(eh)pinch(E,eh.P);else{E.vis=false;E.down=false;E.hand=false}}
+ handHover=dh&&!D.down?dh.P[8]:null;
+ /* finger snap: (1) thumb presses middle finger, seen for 2+ frames  (2) within ~0.45s the middle finger snaps open
+    (leaves the thumb, or lands in the palm).  Tolerates dropped frames; cooldown stops double fires. */
+ const now=performance.now();
+ hands.forEach(h=>{const P=h.P,sl=h.sl,hs=(dist(P[0],P[9])+dist(P[5],P[17]))/2||1,
+   m=dist(P[4],P[12])/hs,i=dist(P[4],P[8])/hs,
+   palm={x:(P[0].x+P[5].x+P[9].x+P[13].x+P[17].x)/5,y:(P[0].y+P[5].y+P[9].y+P[13].y+P[17].y)/5},pd=dist(P[12],palm)/hs,
+   drawing=(h===dh&&D.down)||(h===eh&&E.down);
+  if(m<.42&&i>.4&&!drawing){if(!sl.armN||now>sl.armUntil)sl.armN=0;sl.armN++;sl.armUntil=now+450;if(sl.armN===1)sl.armT=now;snapArm=now+450}
+  else if(sl.armN>=2&&now<sl.armUntil&&now-sl.armT<1200&&(m>.62||pd<.55)&&now-lastSnap>1200&&!shooting){lastSnap=now;sl.armN=0;snapArm=0;vanish(P[9])}
+  else if(now>sl.armUntil)sl.armN=0});
+ sctx.strokeStyle='rgba(255,255,255,.35)';sctx.fillStyle='rgba(255,255,255,.6)';sctx.lineWidth=1.5;
+ hands.forEach(h=>{CONN.forEach(c=>{sctx.beginPath();sctx.moveTo(h.P[c.start].x,h.P[c.start].y);sctx.lineTo(h.P[c.end].x,h.P[c.end].y);sctx.stroke()});h.P.forEach(p=>{sctx.beginPath();sctx.arc(p.x,p.y,2.4,0,7);sctx.fill()})});
+ if(!shooting&&hands.length>1&&hands.every(h=>isL(h.P))){lHold+=1}else lHold=0;
+ if(lHold>28&&Date.now()-lastShot>6000){lHold=0;shoot()}
+}
+
+/* ---------- snap-to-vanish: the lipstick dissolves into sparkles from where you snapped ---------- */
+const fxc=$('#fx2'),fctx=fxc.getContext('2d');let vgen=0;
+function vanish(o){
+ o=o||{x:W/2,y:H/2};
+ const d=dctx.getImageData(0,0,W,H).data,ps=[],r=Math.random;let any=false;
+ for(let i=3;i<d.length;i+=4)if(d[i]>6){any=true;break}
+ if(!any)return;                       /* nothing on the glass */
+ pushUndo();dctx.clearRect(0,0,W,H);   /* always wipe immediately, even if an animation is still running */
+ sfx.snap();
+ const step=4;
+ for(let y=2;y<H;y+=step)for(let x=2;x<W;x+=step){const i=(y*W+x)*4;if(d[i+3]>20)ps.push({x,y,c:`rgba(${d[i]},${d[i+1]},${d[i+2]},${(Math.min(255,d[i+3]*1.2)/255).toFixed(2)})`})}
+ if(ps.length>7000){const k=Math.ceil(ps.length/7000);for(let i=ps.length-1;i>=0;i--)if(i%k)ps.splice(i,1)}
+ if(!ps.length)return;
+ const my=++vgen;
+ const maxD=Math.hypot(W,H),t0=performance.now(),stars=[];
+ ps.forEach(p=>{const dx=p.x-o.x,dy=p.y-o.y,dd=Math.hypot(dx,dy)||1,ang=Math.atan2(dy,dx)+(r()-.5)*1.3,sp=50+r()*230;
+  p.dl=dd/maxD*620+r()*140;p.vx=Math.cos(ang)*sp;p.vy=Math.sin(ang)*sp-50-r()*110;p.life=650+r()*650;p.sz=4+r()*2.4});
+ for(let i=0;i<22;i++){const a=r()*6.283,sp=120+r()*520;stars.push({a,sp,sz:6+r()*10,dl:r()*260,life:500+r()*500,rot:r()*3})}
+ const star=(x,y,s,rot,al)=>{fctx.save();fctx.translate(x,y);fctx.rotate(rot);fctx.globalAlpha=al;fctx.fillStyle='#fff';fctx.beginPath();
+  for(let i=0;i<8;i++){const rr=i%2?s*.22:s;fctx.lineTo(Math.cos(i*Math.PI/4)*rr,Math.sin(i*Math.PI/4)*rr)}fctx.closePath();fctx.shadowColor='#ff8a8a';fctx.shadowBlur=12;fctx.fill();fctx.restore()};
+ (function frame(now){
+  if(my!==vgen)return;
+  const t=Math.max(0,now-t0);fctx.clearRect(0,0,W,H);let alive=t<420;
+  /* flash + expanding ring where you snapped */
+  if(t<760){const k=t/760,g=fctx.createRadialGradient(o.x,o.y,0,o.x,o.y,40+k*160);g.addColorStop(0,`rgba(255,235,230,${.7*(1-k)})`);g.addColorStop(1,'rgba(255,120,120,0)');fctx.fillStyle=g;fctx.fillRect(o.x-220,o.y-220,440,440);
+   fctx.strokeStyle=`rgba(255,255,255,${.8*(1-k)})`;fctx.lineWidth=3+6*(1-k);fctx.beginPath();fctx.arc(o.x,o.y,t/620*maxD*.9,0,7);fctx.stroke();alive=true}
+  for(const p of ps){const lt=t-p.dl;
+   if(lt<0){fctx.fillStyle=p.c;fctx.fillRect(p.x-p.sz/2,p.y-p.sz/2,p.sz,p.sz);alive=true;continue}
+   const k=lt/p.life;if(k>=1)continue;alive=true;const s=lt/1000,e=1-k,
+    x=p.x+p.vx*s*(1-.35*k),y=p.y+p.vy*s+90*s*s,sz=p.sz*(1-.55*k);
+   fctx.globalAlpha=e*e;fctx.fillStyle=p.c;fctx.beginPath();fctx.arc(x,y,sz/2,0,7);fctx.fill()}
+  fctx.globalAlpha=1;
+  for(const s of stars){const lt=t-s.dl;if(lt<0||lt>s.life){if(lt<0)alive=true;continue}alive=true;const k=lt/s.life,dd=s.sp*(lt/1000);star(o.x+Math.cos(s.a)*dd,o.y+Math.sin(s.a)*dd,s.sz*(1-.4*k),s.rot+k*2,1-k)}
+  if(alive)requestAnimationFrame(frame);else fctx.clearRect(0,0,W,H)
+ })(t0)}
+$('#clear').onclick=()=>vanish();
+
+/* ---------- ui per frame ---------- */
+let dwell=-1,dwellT=0;
+function ui(){
+ const r=mirror.getBoundingClientRect(),k=r.width/810;
+ const tx=D.x/W*r.width,ty=D.y/H*r.height;
+ tube.classList.toggle('on',D.vis);tube.classList.toggle('down',D.down);
+ tube.style.transform=`translate(${tx-17}px,${ty-6.8}px) rotate(-16deg) scale(${k*(D.down?.95:1)})`;
+ ring.classList.toggle('on',E.vis);ring.classList.toggle('down',E.down);
+ const rs=EW*r.width/W;ring.style.width=ring.style.height=rs+'px';ring.style.left=E.x/W*r.width+'px';ring.style.top=E.y/H*r.height+'px';
+ /* dwell select */
+ let hp=null;if(handHover)hp=toClient(handHover);else if(mouseIn)hp=mouseIn;
+ let hit=-1;if(hp&&!pal.classList.contains('hide'))sws.forEach((s,i)=>{const b=s.getBoundingClientRect();if(hp.x>b.left-8&&hp.x<b.right+8&&hp.y>b.top-8&&hp.y<b.bottom+8)hit=i});
+ if(hit!==dwell){dwell=hit;dwellT=performance.now();sws.forEach(s=>s.style.setProperty('--p',0))}
+ if(hit>=0){const p=Math.min(1,(performance.now()-dwellT)/750);sws[hit].style.setProperty('--p',p*100);if(p>=1&&hit!==ci)pick(hit)}
+ /* status */
+ let t,c='';
+ if(shooting){t='say cheese…';c='ok'}
+ else if(!camOn&&!D.mouse){t='waking the mirror…'}
+ else if(!tracking){t='hand tracking off — use your mouse'}
+ else if(!lm&&!D.mouse){t='loading hand tracking…'}
+ else if(E.down){t='erasing';c='erase'}else if(D.down){t='drawing';c='draw'}
+ else if(performance.now()<snapArm){t='snap!';c='ok'}
+ else if(lHold>0){t='hold the L…';c='ok'}
+ else if(E.vis&&!D.vis){t='left hand erases — show your right hand to draw';c='erase'}
+ else if(D.vis){t=E.vis?'right hand draws · left hand erases':'right hand found — pinch to draw';c='ok'}
+ else t='no hand — hold it up to the mirror';
+ stat.className='stat '+c;stat.lastElementChild.textContent=t;
+}
+function loop(){
+ if(lm&&tracking&&camOn&&video.readyState>=2&&video.currentTime!==lastT){lastT=video.currentTime;try{process(lm.detectForVideo(video,performance.now()))}catch(e){}}
+ else if(!tracking&&!D.mouse&&!E.mouse){sctx.clearRect(0,0,W,H);D.vis=E.vis=D.down=E.down=false}
+ follow(D);follow(E);apply(D,false);apply(E,true);ui();requestAnimationFrame(loop)
+}
+
+/* ---------- mouse / touch ---------- */
+mirror.addEventListener('pointermove',e=>{mouseIn={x:e.clientX,y:e.clientY};const S=e.shiftKey||E.mouse?E:D;if(S.mouse||(!D.vis||!tracking)){const p=toCanvas(e.clientX,e.clientY);if(!S.mouse&&!S.down){S.vis=true;smooth(S,p,1)}else smooth(S,p,.6)}});
+mirror.addEventListener('pointerdown',e=>{if(e.target.closest('.palette'))return;mirror.setPointerCapture(e.pointerId);const S=e.shiftKey?E:D;S.mouse=true;const p=toCanvas(e.clientX,e.clientY);S.vis=false;smooth(S,p,1);S.down=true});
+const mUp=()=>{[D,E].forEach(S=>{if(S.mouse){S.mouse=false;S.down=false;if(!camOn||!tracking||!lm)S.vis=true}})};
+mirror.addEventListener('pointerup',mUp);mirror.addEventListener('pointercancel',mUp);
+mirror.addEventListener('pointerleave',()=>{mouseIn=null;if(!D.mouse&&(!camOn||!tracking)){D.vis=false;E.vis=false}});
+
+/* ---------- filters, buttons ---------- */
+function setFilter(f){filter=f;app.dataset.f=f;mirror.dataset.f=f;document.querySelectorAll('#filters button').forEach(b=>b.classList.toggle('on',b.dataset.f===f))}
+app.dataset.f='normal';
+document.querySelectorAll('#filters button').forEach(b=>b.onclick=()=>setFilter(b.dataset.f));
+function swapHands(){swapped=!swapped;try{localStorage.setItem('mirror-swap',swapped?'1':'0')}catch(e){}slots.forEach(s=>{s.s=0;s.p=null});D.vis=E.vis=D.down=E.down=false}
+$('#swap').onclick=swapHands;
+function setTracking(on){tracking=on;$('#track').textContent=on?'disable hand tracking':'enable hand tracking';if(!on){sctx.clearRect(0,0,W,H);handHover=null}}
+$('#track').onclick=()=>setTracking(!tracking);
+const modal=(el,o)=>el.classList.toggle('open',o);
+$('#how').onclick=()=>modal($('#howModal'),true);
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>document.querySelectorAll('.modal').forEach(m=>modal(m,false)));
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('pointerdown',e=>{if(e.target===m)modal(m,false)}));
+addEventListener('keydown',e=>{
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();return undo()}
+ const k=e.key.toLowerCase();
+ if(k==='escape'){document.querySelectorAll('.modal').forEach(m=>modal(m,false));if(inBooth())closeBooth()}
+ else if(k===' '||k==='enter'){if(e.target.tagName!=='BUTTON'){e.preventDefault();shoot()}}
+ else if(/^[1-6]$/.test(k))pick(+k-1);
+ else if(k==='['||k==='arrowup'){e.preventDefault();pick(ci-1)}else if(k===']'||k==='arrowdown'){e.preventDefault();pick(ci+1)}
+ else if(KEYF[k])setFilter(KEYF[k]);else if(k==='s')swapHands();else if(k==='c')vanish();else if(k==='h')setTracking(!tracking);else if(k==='p')pal.classList.toggle('hide')});
+
+/* ---------- little sounds (WebAudio, no files) ---------- */
+let ac=null;
+const audio=()=>{try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume()}catch(e){}return ac};
+function tone(f,d=.12,v=.06,type='sine',t0=0){const a=audio();if(!a)return;const o=a.createOscillator(),g=a.createGain(),t=a.currentTime+t0;o.type=type;o.frequency.value=f;g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+d+.02)}
+function hiss(d,v=.05,t0=0,f=1500){const a=audio();if(!a)return;const n=Math.max(1,a.sampleRate*d|0),b=a.createBuffer(1,n,a.sampleRate),ch=b.getChannelData(0);for(let i=0;i<n;i++)ch[i]=(Math.random()*2-1)*(1-i/n);
+ const s=a.createBufferSource(),bp=a.createBiquadFilter(),g=a.createGain(),t=a.currentTime+t0;s.buffer=b;bp.type='bandpass';bp.frequency.value=f;g.gain.value=v;s.connect(bp);bp.connect(g);g.connect(a.destination);s.start(t)}
+const sfx={snap:()=>{hiss(.12,.1,0,4500);tone(1400,.3,.04,'sine',.02);tone(2100,.4,.03,'sine',.08);hiss(.8,.05,.1,2800)},beep:()=>tone(880,.12,.05),shutter:()=>{hiss(.09,.12,0,3000);tone(160,.1,.08,'triangle',.02)},pop:()=>tone(660,.09,.05,'triangle'),
+ print:()=>[0,.9,1.85,2.8].forEach(t=>hiss(.62,.05,t,900))};
+
+/* ---------- photos ---------- */
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function snap(){const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#240608';x.fillRect(0,0,W,H);
+ if(video.videoWidth){const vw=video.videoWidth,vh=video.videoHeight,s=Math.max(W/vw,H/vh),dx=(vw*s-W)/2,dy=(vh*s-H)/2;x.save();x.filter=FILTERS[filter];x.translate(W,0);x.scale(-1,1);x.drawImage(video,-dx,-dy,vw*s,vh*s);x.restore();x.filter='none'}
+ if(filter==='red'){const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(255,125,105,.78)');g.addColorStop(1,'rgba(225,30,30,.56)');x.fillStyle=g;x.fillRect(0,0,W,H)}
+ if(filter==='nokia'||filter==='vhs'){x.fillStyle='rgba(0,0,0,.2)';for(let y=0;y<H;y+=5)x.fillRect(0,y,W,1.5)}
+ x.filter='blur(.55px)';x.drawImage(dc,0,0);x.filter='none';return c}
+const cnt=$('#count'),cnum=$('#cnum'),clab=$('#clab');
+function showCount(txt,label,small){cnum.className=small?'small':'';cnum.textContent=txt;clab.textContent=label||'';cnt.classList.add('on');if(!small){void cnum.offsetWidth;cnum.classList.add('pop')}}
+async function countdown(n){for(let s=3;s>=1;s--){showCount(s,n+' of 2');sfx.beep();await wait(900)}}
+function flash(){const f=$('#flash');f.classList.remove('go');void f.offsetWidth;f.classList.add('go')}
+async function shoot(){
+ if(shooting||inBooth()||!document.getElementById('gate').classList.contains('gone'))return;
+ shooting=true;lastShot=Date.now();app.classList.add('busy');
+ const shots=[];
+ try{
+  for(let i=0;i<2;i++){
+   if(i>0){showCount('get ready for the next one…','1 of 2 done',true);await wait(2600)}
+   await countdown(i+1);
+   cnt.classList.remove('on');flash();sfx.shutter();shots.push(snap());
+   await wait(350)}
+  cnt.classList.remove('on');
+  await wait(250);
+  await openBooth(shots);
+ }finally{shooting=false;app.classList.remove('busy');cnt.classList.remove('on')}}
+$('#shutter').onclick=shoot;
+
+/* ---------- photo strip + booth ---------- */
+const booth=$('#booth'),stripC=$('#stripC');
+const PW=640,PH=480,SM=30,SW=PW+SM*2,SH=PH*2+SM*3+64;
+let strip={shots:[],kisses:[]};
+const inBooth=()=>booth.classList.contains('open');
+function lips(x,k){
+ /* small glossy kiss-mark, in the spirit of the iOS emoji */
+ x.save();x.translate(k.x,k.y);x.rotate(k.r);x.scale(k.s,k.s);x.globalAlpha=k.a;
+ x.shadowColor='rgba(110,0,20,.35)';x.shadowBlur=5;x.shadowOffsetY=2;
+ const up=new Path2D(),lo=new Path2D();
+ up.moveTo(-48,5);up.bezierCurveTo(-40,-7,-27,-22,-12,-22);up.bezierCurveTo(-6,-22,-2,-17,0,-14);up.bezierCurveTo(2,-17,6,-22,12,-22);up.bezierCurveTo(27,-22,40,-7,48,5);
+ up.bezierCurveTo(30,9,12,10,0,10);up.bezierCurveTo(-12,10,-30,9,-48,5);up.closePath();
+ lo.moveTo(-46,7);lo.bezierCurveTo(-34,31,-14,38,0,38);lo.bezierCurveTo(14,38,34,31,46,7);lo.bezierCurveTo(30,13,12,14,0,14);lo.bezierCurveTo(-12,14,-30,13,-46,7);lo.closePath();
+ const gu=x.createLinearGradient(0,-22,0,10);gu.addColorStop(0,lighten(k.c,.18));gu.addColorStop(1,darken(k.c,.12));
+ const gl=x.createLinearGradient(0,8,0,38);gl.addColorStop(0,k.c);gl.addColorStop(.6,lighten(k.c,.12));gl.addColorStop(1,darken(k.c,.18));
+ x.fillStyle=gu;x.fill(up);x.fillStyle=gl;x.fill(lo);
+ x.shadowColor='transparent';
+ x.strokeStyle=darken(k.c,.45);x.globalAlpha=k.a*.8;x.lineWidth=2.4;x.lineCap='round';
+ x.beginPath();x.moveTo(-47,6);x.bezierCurveTo(-30,11,-12,12,0,12);x.bezierCurveTo(12,12,30,11,47,6);x.stroke();
+ x.globalAlpha=k.a*.55;x.fillStyle='#fff';
+ x.beginPath();x.ellipse(-20,-13,11,3.4,-.45,0,7);x.fill();
+ x.beginPath();x.ellipse(-6,25,15,4,0,0,7);x.fill();
+ x.globalAlpha=k.a*.3;x.beginPath();x.ellipse(20,-12,6,2.2,.45,0,7);x.fill();
+ x.restore()}
+function renderStrip(){
+ stripC.width=SW;stripC.height=SH;const x=stripC.getContext('2d');
+ x.fillStyle='#0b0506';x.fillRect(0,0,SW,SH);
+ strip.shots.forEach((s,i)=>x.drawImage(s,SM,SM+i*(PH+SM),PW,PH));
+ strip.kisses.forEach(k=>lips(x,k));
+ x.fillStyle='rgba(190,60,70,.75)';x.font='italic 30px "Instrument Serif",Georgia,serif';x.textAlign='center';x.fillText('mirror, mirror',SW/2,SH-30);}
+function sizeStrip(){const sh=Math.min(innerHeight*.64,760,(innerWidth-60)*SH/SW),sw=sh*SW/SH;booth.style.setProperty('--sh',sh+'px');booth.style.setProperty('--sw',sw+'px')}
+function openBooth(shots){
+ strip={shots,kisses:[]};renderStrip();sizeStrip();
+ booth.classList.remove('printing','done');document.body.classList.add('inbooth');booth.classList.add('open');
+ void booth.offsetWidth;booth.classList.add('printing');
+ setTimeout(sfx.print,350);
+ return wait(4100).then(()=>booth.classList.add('done'))}
+function closeBooth(){booth.classList.remove('open','printing','done');document.body.classList.remove('inbooth')}
+$('#back').onclick=closeBooth;
+$('#kiss').onclick=()=>{const r=rng(Date.now()),c=COLORS[ci];
+ for(let i=0,n=0;n<5&&i<80;i++){
+  const ph=r()<.5?0:1,u=r(),v=r();
+  if(Math.abs(u-.5)<.2&&Math.abs(v-.5)<.3&&r()<.85)continue; /* mostly keep faces clear */
+  strip.kisses.push({x:SM+30+u*(PW-60),y:SM+ph*(PH+SM)+24+v*(PH-48),s:.36+r()*.18,r:(r()-.5)*.9,a:.5+r()*.2,c});n++}
+ if(strip.kisses.length>70)strip.kisses.splice(0,strip.kisses.length-70);
+ renderStrip();sfx.pop()};
+$('#save').onclick=()=>{stripC.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='mirror-photos.png';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)},'image/png');
+ const s=$('#save');s.textContent='saved ♥';setTimeout(()=>s.textContent='save photo',1800)};
+addEventListener('resize',()=>{if(inBooth())sizeStrip()});
+
+/* ---------- boot ---------- */
+async function loadModel(){
+ try{const m=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+  const v=await m.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  const o=g=>({baseOptions:{modelAssetPath:MODEL,delegate:g?'GPU':'CPU'},runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.55,minHandPresenceConfidence:.5,minTrackingConfidence:.5});
+  try{lm=await m.HandLandmarker.createFromOptions(v,o(true))}catch{lm=await m.HandLandmarker.createFromOptions(v,o(false))}
+  CONN=m.HandLandmarker.HAND_CONNECTIONS||[]}catch(e){console.warn(e);$('#err').textContent='Hand model failed to load — mouse drawing still works.'}}
+const modelP=loadModel();
+$('#start').onclick=async()=>{const b=$('#start');b.textContent='Opening…';audio();
+ try{const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:960},facingMode:'user'},audio:false});
+  video.srcObject=s;await video.play();camOn=true;await Promise.race([modelP,wait(6000)]);$('#gate').classList.add('gone')}
+ catch(e){b.textContent='Try again';$('#err').textContent=location.protocol==='file:'||!window.isSecureContext?'Camera needs https or localhost.':'Camera blocked — allow it in the address bar, or continue with a mouse.';
+  if(!$('#skip')){const k=document.createElement('button');k.id='skip';k.className='pill';k.style.cssText='margin-top:12px;background:none;color:#fff';k.textContent='Use mouse only';k.onclick=()=>$('#gate').classList.add('gone');$('#err').after(k)}}};
+requestAnimationFrame(loop);
+window.__mirror={shoot,D,E,process,dctx};
+</script>
+</body>
+</html>
